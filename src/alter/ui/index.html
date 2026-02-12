@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alter</title>
+  <link rel="icon" href="/assets/assets/logo.png" type="image/png" />
+  <link rel="shortcut icon" href="/assets/assets/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/assets/assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css" />
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+  <div id="app">
+
+    <!-- Landing State -->
+    <section id="landing" class="landing-view">
+      <div class="landing-content">
+        <h1 class="logo">ALTER</h1>
+        <p class="subtitle skeleton skeleton-text" id="welcome-subtitle">LOADING INTELLIGENCE</p>
+        <div class="suggestions" id="prompt-grid">
+          <div class="skeleton skeleton-chip"></div>
+          <div class="skeleton skeleton-chip"></div>
+          <div class="skeleton skeleton-chip"></div>
+          <div class="skeleton skeleton-chip"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Header (Chat Mode) -->
+    <header class="top hidden" id="header">
+      <div class="brand">
+        <div class="mark">ALTER</div>
+        <div class="sub" id="status">disconnected</div>
+      </div>
+      <div class="actions">
+        <button id="settings-btn" class="icon-btn" title="Settings">
+          <i data-lucide="settings-2"></i> <span class="kbd">s</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Chat Log -->
+    <main class="log hidden" id="log"></main>
+
+    <!-- Input Area -->
+    <section class="composer-container">
+      <!-- Skills Popover -->
+      <div id="skills-popover" class="hidden">
+        <div class="popover-header">SKILLS</div>
+        <div id="skills-list"></div>
+      </div>
+
+      <!-- Commands Popover -->
+      <div id="commands-popover" class="hidden">
+        <div class="popover-header">COMMANDS</div>
+        <div id="commands-list"></div>
+      </div>
+
+      <div class="composer-wrapper" id="composer-wrapper">
+        <div class="composer">
+          <input id="input" type="text" autocomplete="off" placeholder="Command..." />
+          <div class="composer-actions">
+            <span class="hint"><span class="kbd">/</span> to focus</span>
+            <button id="send" class="icon-btn"><i data-lucide="arrow-right"></i></button>
+          </div>
+        </div>
+    </section>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>SYSTEM SETTINGS</h3>
+        <button id="close-settings" class="icon-btn"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Section: Identity -->
+        <div class="settings-section">
+          <span class="section-title">IDENTITY & MODEL</span>
+
+          <div class="setting-row">
+            <label>Backend Provider</label>
+            <div class="select-wrapper">
+              <select id="provider-select">
+                <option value="ollama">Ollama (Local)</option>
+                <option value="github">GitHub Models (Cloud)</option>
+                <option value="openai">OpenAI</option>
+              </select>
+              <i data-lucide="chevron-down" class="select-icon"></i>
+            </div>
+            <div class="setting-note">Determines where inference runs.</div>
+          </div>
+
+          <div class="setting-row">
+            <label>Active Model</label>
+            <div class="select-wrapper">
+              <select id="model-select">
+                <option disabled>Loading...</option>
+              </select>
+              <i data-lucide="chevron-down" class="select-icon"></i>
+            </div>
+            <div class="setting-note" id="current-model-display">Currently active: ...</div>
+          </div>
+        </div>
+
+        <!-- Section: Behavior -->
+        <div class="settings-section">
+          <span class="section-title">BEHAVIOR</span>
+
+          <div class="setting-group checkbox" style="border:none; padding:0;">
+            <input type="checkbox" id="auto-confirm-check" />
+            <label for="auto-confirm-check" style="margin:0; cursor:pointer;">Auto-confirm tools (Session)</label>
+          </div>
+          <div class="setting-note" style="margin-left: 2rem;">
+            Skip manual approval for safe tools (read-only). Risky tools will still ask.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="save-settings" class="btn-primary">APPLY CHANGES</button>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- Access Token Modal -->
+  <div id="token-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>ACCESS TOKEN</h3>
+      </div>
+
+      <div class="setting-group">
+        <label>API KEY</label>
+        <input id="token-input" class="text-input" type="password" autocomplete="off"
+          placeholder="Enter access token…" />
+        <div id="token-help" class="token-help">
+          This server requires an API key to use the API + WebSocket. It will be saved in this browser for this URL.
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="token-save" class="btn-primary">CONNECT</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Onboard Modal -->
+  <div id="onboard-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>ONBOARD</h3>
+        <button id="close-onboard" class="icon-btn" title="Close"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="setting-group">
+        <label id="onboard-step">STEP</label>
+        <div id="onboard-question" style="font-family: var(--font-body); line-height: 1.5;"></div>
+        <input id="onboard-input" class="text-input" type="text" autocomplete="off" placeholder="Type your answer…" />
+        <div id="onboard-hint" class="token-help"></div>
+      </div>
+
+      <div class="modal-actions" style="gap: 0.75rem; justify-content: space-between;">
+        <button id="onboard-skip" class="icon-btn">SKIP</button>
+        <div style="display:flex; gap:0.75rem;">
+          <button id="onboard-back" class="icon-btn">BACK</button>
+          <button id="onboard-next" class="btn-primary">NEXT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/marked.min.js"></script>
+  <script src="/assets/app.js"></script>
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

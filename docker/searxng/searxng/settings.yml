@@ -1,0 +1,18 @@
+﻿# Minimal local config for Alter integration.
+# - Generates proper links via base_url
+# - Enables JSON output (required for Alter's SearXNG integration)
+# - Keeps limiter off (no Redis needed for local use)
+use_default_settings: true
+
+server:
+  base_url: http://127.0.0.1:8088/
+  secret_key: "32d1e02732562f25e2a02a8e8cb39e8996d182ad1a649847821ce7e9a1a57073"
+  limiter: false
+  public_instance: false
+
+search:
+  formats:
+    - html
+    - json
+
+

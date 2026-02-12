@@ -1,0 +1,12 @@
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    ports:
+      - "8088:8080"
+    environment:
+      # Used by SearXNG to generate correct links.
+      - SEARXNG_BASE_URL=http://127.0.0.1:8088/
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    restart: unless-stopped

@@ -1,0 +1,60 @@
+index:
+  roots: []
+llm:
+  backend: ollama
+  model: qwen3-coder:480b-cloud
+  ollama_autostart: true
+  ollama_base_url: http://127.0.0.1:11434
+  thinking_mode: medium
+  timeout_s: 120
+memory:
+  enabled: true
+  max_chars_per_item: 800
+  max_relevant: 8
+  path: data/memory.sqlite3
+  redact_secrets: true
+  retrieve_kinds:
+  - user
+  - tool
+  - note
+  store_assistant_outputs: false
+  store_tool_outputs: true
+  summary_enabled: true
+  summary_every_n_user_turns: 12
+  summary_max_chars_per_source: 700
+  summary_max_source_events: 80
+remote:
+  tailscale_enabled: true
+security:
+  allowed_commands:
+  - python
+  - git
+  - pwsh
+  - cmd
+  - cmd.exe
+  - powershell
+  - ipconfig
+  - net
+  - ping
+  - whoami
+  - curl
+  - code
+  allowed_write_roots:
+  - .
+  api_key: adityaissexy
+  api_keys:
+  - adityaissexy
+  - maichandanhu
+  auto_confirm_shell: false
+  max_requests_per_minute: 120
+  require_api_key: true
+  require_confirmation: true
+ui:
+  host: 127.0.0.1
+  port: 8080
+web:
+  rendered_headless: true
+  rendered_prefer_chrome_channel: true
+  rendered_timeout_s: 20
+  rendered_wait_ms: 1200
+  searxng_base_url: http://127.0.0.1:8088

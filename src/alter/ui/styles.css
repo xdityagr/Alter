@@ -1,7 +1,11 @@
-/* Theme: Kinetic Utility (Void/Starlight) */
+/* ═══════════════════════════════════════════════════════
+   ALTER — Kinetic Utility (Void/Starlight)
+   Pervasive macOS-level fluid spring animations
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Spring Easing Constants ────────────────────────── */
 :root {
   --bg: #050505;
-  /* Deepest Void */
   --surface: #0a0a0a;
   --panel: #111111;
   --border: #333333;
@@ -10,81 +14,139 @@
   --text: #e5e5e5;
   --text-dim: #666666;
   --accent: #ffffff;
-  /* Starlight */
 
   --radius: 0px;
-  /* Sharp corners preferred, or very subtle 4px */
   --radius-lg: 8px;
 
   --font-display: 'Space Grotesk', sans-serif;
   --font-body: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
+  /* Spring curves (macOS-like) */
+  --spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring-gentle: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  /* Heavy ease */
 
   /* Glass */
-  --glass-bg: rgba(5, 5, 5, 0.6);
-  --glass-bg-2: rgba(10, 10, 10, 0.45);
+  --glass-bg: rgba(5, 5, 5, 0.55);
+  --glass-bg-2: rgba(10, 10, 10, 0.4);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+
+  /* Aurora (theme-dependent) */
+  --aurora-1: rgba(107, 33, 168, 0.35);
+  --aurora-2: rgba(14, 165, 233, 0.3);
+  --aurora-3: rgba(139, 92, 246, 0.25);
+
+  /* Aurora Brightness Control */
+  --aurora-opacity: 0.9;
 }
 
-* {
+/* Light Theme moved to end for specificity */
+
+/* Pure White Theme (Specific Override) */
+body.theme-pure.theme-light {
+  --bg: #ffffff;
+  --surface: #fafafa;
+  --panel: #f4f4f5;
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: #e4e4e7;
+  --border: #e4e4e7;
+}
+
+/* ── Theme Variants ─────────────────────────────────── */
+body.theme-ember {
+  --aurora-1: rgba(220, 38, 38, 0.35);
+  --aurora-2: rgba(245, 158, 11, 0.3);
+  --aurora-3: rgba(251, 113, 133, 0.25);
+}
+
+body.theme-arctic {
+  --aurora-1: rgba(6, 182, 212, 0.3);
+  --aurora-2: rgba(59, 130, 246, 0.35);
+  --aurora-3: rgba(147, 197, 253, 0.2);
+  --aurora-3: rgba(147, 197, 253, 0.2);
+}
+
+body.theme-pure {
+  --bg: #000000;
+  --surface: #050505;
+  --panel: #0a0a0a;
+  --glass-bg: rgba(0, 0, 0, 0.8);
+  --glass-bg-2: rgba(0, 0, 0, 0.9);
+  --glass-border: #222;
+}
+
+/* ── Aurora Canvas ──────────────────────────────────── */
+#aurora-bg {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  opacity: var(--aurora-opacity);
+  pointer-events: none;
+  transition: opacity 1s var(--spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #aurora-bg {
+    display: none;
+  }
+}
+
+/* ── Base Reset ─────────────────────────────────────── */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  margin: 0;
-  height: 100vh;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-body);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Typography */
-h1,
-h2,
-h3 {
-  font-family: var(--font-display);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: -0.02em;
-  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 a {
   color: var(--accent);
   text-decoration: underline;
-  text-decoration-thickness: 1px;
   text-underline-offset: 2px;
-  transition: opacity 0.2s;
+  transition: opacity 0.25s var(--spring);
 }
 
 a:hover {
-  opacity: 0.8;
+  opacity: 0.75;
 }
 
-/* App Container */
+/* ── App Container ──────────────────────────────────── */
 #app {
   max-width: 900px;
   margin: 0 auto;
   width: 100%;
-  height: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   position: relative;
 }
 
-/* View States */
+/* ── View States ────────────────────────────────────── */
 .hidden {
   display: none !important;
 }
 
-/* Landing View */
+/* ── Landing View ───────────────────────────────────── */
 .landing-view {
   flex: 1;
   display: flex;
@@ -92,12 +154,12 @@ a:hover {
   align-items: center;
   justify-content: center;
   opacity: 1;
-  transition: opacity 0.5s var(--ease-out);
+  transition: opacity 0.6s var(--spring);
 }
 
 .landing-content {
   text-align: center;
-  animation: slideUp 0.8s var(--ease-out);
+  animation: floatIn 0.9s var(--spring) both;
 }
 
 .logo {
@@ -124,25 +186,36 @@ a:hover {
 }
 
 .suggestion-chip {
-  background: transparent;
-  border: 1px solid var(--border);
+  background: var(--surface);
+  /* Better for light mode contrast */
+  border: 1px solid var(--glass-border);
   color: var(--text-dim);
   padding: 0.6rem 1.2rem;
   font-family: var(--font-mono);
   font-size: 0.8rem;
   cursor: pointer;
-  transition: all 0.2s var(--ease-out);
+  transition: all 0.4s var(--spring);
+  transform: translateY(0);
+  backdrop-filter: blur(5px);
 }
 
 .suggestion-chip:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--panel);
+  border-color: var(--text-dim);
+  color: var(--text);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-/* Header */
+.suggestion-chip:active {
+  transform: translateY(-1px) scale(0.97);
+  transition-duration: 0.1s;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+/* ── Header ─────────────────────────────────────────── */
 .top {
-  padding: 1.5rem 2rem;
+  padding: 1rem 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -151,37 +224,54 @@ a:hover {
   left: 0;
   right: 0;
   max-width: 900px;
-  margin: 0 auto;
+  margin: 1rem auto 0;
   z-index: 10;
-  transition: opacity 0.3s ease;
-
-  background: linear-gradient(180deg, var(--glass-bg), var(--glass-bg-2));
-  border-bottom: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  transition: opacity 0.5s var(--spring), transform 0.5s var(--spring);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
 }
 
 .top.dimmed {
   opacity: 0.3;
+  transform: translateY(-4px);
 }
 
 .brand {
   display: flex;
-  flex-direction: column;
+  gap: 1rem;
+  align-items: baseline;
 }
 
 .mark {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.2rem;
-  color: var(--accent);
+  font-size: 1.25rem;
+  letter-spacing: 0.15em;
 }
 
 .sub {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--text-dim);
+  transition: color 0.4s var(--spring);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  padding: 0.15rem 0.4rem;
+  margin-left: 0.5rem;
+  transition: all 0.3s var(--spring);
 }
 
 .icon-btn {
@@ -190,22 +280,27 @@ a:hover {
   color: var(--text-dim);
   cursor: pointer;
   padding: 0.5rem;
-  transition: color 0.2s;
+  transition: all 0.35s var(--spring);
+  transform: scale(1);
 }
 
 .icon-btn:hover {
   color: var(--accent);
+  transform: scale(1.08);
 }
 
-/* Log */
+.icon-btn:active {
+  transform: scale(0.92);
+  transition-duration: 0.1s;
+}
+
+/* ── Chat Log ───────────────────────────────────────── */
 .log {
   flex: 1;
   overflow-y: auto;
-  padding: 6rem 2rem 10rem 2rem;
-  /* Top padding for header, bottom for input */
+  padding: 7rem 2rem 10rem 2rem;
   scrollbar-width: none;
-  /* Hide scrollbar */
-  transition: opacity 0.3s ease;
+  transition: opacity 0.5s var(--spring);
 }
 
 .log::-webkit-scrollbar {
@@ -213,12 +308,14 @@ a:hover {
 }
 
 .log.dimmed {
-  opacity: 0.3;
+  opacity: 0.25;
+  transition: opacity 0.4s var(--spring);
 }
 
+/* ── Messages ───────────────────────────────────────── */
 .msg {
   margin-bottom: 2.5rem;
-  animation: slideUp 0.4s var(--ease-out);
+  animation: floatIn 0.5s var(--spring) both;
   max-width: 100%;
 }
 
@@ -230,70 +327,87 @@ a:hover {
 
 .msg.user .bubble {
   display: inline-block;
-  background: var(--panel);
+  background: var(--surface);
+  /* Adaptive background */
   padding: 0.8rem 1.2rem;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   text-align: left;
+  transition: transform 0.3s var(--spring), box-shadow 0.3s var(--spring);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom-right-radius: 2px;
+}
+
+.msg.user .bubble:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 .msg.assistant {
   padding-left: 0;
-  border-left: 1px solid var(--border);
-  padding-left: 1.5rem;
-}
-
-/* Markdown styling */
-.msg h1,
-.msg h2,
-.msg h3 {
-  margin-top: 1.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.msg p {
   line-height: 1.6;
-  margin: 0.5rem 0;
 }
 
-.msg pre {
-  background: #000;
+.msg.assistant p {
+  margin: 0.6em 0;
+}
+
+.msg.assistant pre {
+  background: var(--surface);
   padding: 1rem;
   border: 1px solid var(--border);
-  overflow-x: auto;
   font-family: var(--font-mono);
   font-size: 0.85rem;
-  margin: 1rem 0;
+  overflow-x: auto;
+  margin: 0.8em 0;
+  transition: border-color 0.3s var(--spring);
 }
 
-.msg code {
+.msg.assistant pre:hover {
+  border-color: var(--text-dim);
+}
+
+.msg.assistant code {
   font-family: var(--font-mono);
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-size: 0.9em;
+  font-size: 0.85em;
+  background: var(--surface);
+  padding: 0.15em 0.4em;
 }
 
-/* Tool execution styles */
+.msg.assistant pre code {
+  background: none;
+  padding: 0;
+}
+
 .msg.tool {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  border-left: 1px dashed var(--border);
-  padding-left: 1.5rem;
+  font-size: 0.85rem;
   color: var(--text-dim);
 }
 
+/* ── Tool Executing ─────────────────────────────────── */
 .tool-executing {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  padding: 0.3rem 0;
+  animation: floatIn 0.4s var(--spring) both;
+  transition: opacity 0.4s var(--spring);
 }
 
-.tool-executing strong {
-  color: var(--text);
+.tool-executing.done {
+  opacity: 0.5;
+  transition: opacity 0.6s var(--spring);
 }
 
-/* Lucide spinner */
+.tool-label {
+  transition: opacity 0.3s var(--spring);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -308,7 +422,6 @@ a:hover {
   animation: none;
 }
 
-/* Web Surf breathing animation */
 @keyframes breathe {
 
   0%,
@@ -336,7 +449,7 @@ a:hover {
 }
 
 .tool-progress-text {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.3s var(--spring);
 }
 
 .tool-progress-text .progress-detail {
@@ -345,7 +458,190 @@ a:hover {
   margin-left: 0.25rem;
 }
 
-/* Composer Area */
+/* ── Terminal Output (Collapsible) ──────────────────── */
+.terminal-details {
+  margin-top: 0.35rem;
+  margin-bottom: 0.15rem;
+  border: none;
+  border-radius: 0;
+  animation: floatIn 0.35s var(--spring) both;
+  background: transparent;
+}
+
+.terminal-summary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.terminal-summary::-webkit-details-marker {
+  display: none;
+}
+
+.terminal-summary::marker {
+  display: none;
+  content: "";
+}
+
+
+
+.term-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.38);
+  transition: color 0.2s;
+}
+
+.terminal-summary:hover .term-toggle {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.term-chevron {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2px;
+  transition: transform 0.25s var(--spring);
+}
+
+.terminal-details[open] .term-chevron {
+  transform: rotate(90deg);
+}
+
+/* ── Terminal Content Window ───────────────────────── */
+.terminal-window {
+  margin-top: 0.35rem;
+  padding: 0.75rem 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.65;
+  max-height: 350px;
+  overflow-y: auto;
+  background: rgba(10, 10, 14, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  color: #c8c8cc;
+  animation: termReveal 0.3s var(--spring) both;
+}
+
+@keyframes termReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.terminal-window::-webkit-scrollbar {
+  width: 4px;
+}
+
+.terminal-window::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-window::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+.term-cmd {
+  color: #ffffff;
+  padding: 0 0 0.55rem;
+  margin-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.term-out {
+  color: #b8b8bf;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  line-height: inherit;
+}
+
+.term-err {
+  color: #fca5a5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  line-height: inherit;
+}
+
+
+/* ── Tool Confirm Card ─────────────────────────────── */
+.tool-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  animation: floatIn 0.4s var(--spring) both;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.tool-card pre {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin: 0.5rem 0;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 0.8rem;
+  border: 1px solid var(--glass-border);
+}
+
+.btn-allow,
+.btn-deny {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s var(--spring);
+  background: transparent;
+  color: var(--text);
+}
+
+.btn-allow:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-deny:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+/* ── Composer ───────────────────────────────────────── */
 .composer-container {
   position: fixed;
   bottom: 2rem;
@@ -357,7 +653,7 @@ a:hover {
 }
 
 .composer-wrapper {
-  transition: transform 0.3s var(--ease-out);
+  transition: transform 0.4s var(--spring);
 }
 
 .composer {
@@ -365,19 +661,21 @@ a:hover {
   border: 1px solid var(--glass-border);
   padding: 0.5rem 1rem;
   display: flex;
-  align-items: center;
-  transition: border-color 0.3s;
+  align-items: flex-end;
+  transition: all 0.4s var(--spring);
   box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
   border-radius: var(--radius-lg);
 }
 
 .composer:focus-within {
   border-color: var(--accent);
+  box-shadow: var(--glass-shadow), 0 0 40px rgba(255, 255, 255, 0.04);
+  transform: translateY(-2px);
 }
 
-.composer input {
+.composer textarea {
   flex: 1;
   background: transparent;
   border: none;
@@ -386,6 +684,12 @@ a:hover {
   color: var(--text);
   padding: 0.8rem;
   outline: none;
+  resize: none;
+  overflow-y: hidden;
+  min-height: 1.5em;
+  max-height: 10em;
+  line-height: 1.5;
+  transition: height 0.3s var(--spring);
 }
 
 .composer-actions {
@@ -400,44 +704,65 @@ a:hover {
   color: var(--text-dim);
 }
 
-/* Skills Popover */
-#skills-popover {
-  position: absolute;
-  bottom: 100%;
-  /* Above input */
-  left: 0;
-  width: 300px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-bottom: none;
-  margin-bottom: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  animation: slideUp 0.2s var(--ease-out);
-}
-
-/* Commands Popover */
+/* ── Skills / Commands Popover ──────────────────────── */
+#skills-popover,
 #commands-popover {
   position: absolute;
   bottom: 100%;
   left: 0;
-  width: 340px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-bottom: none;
-  margin-bottom: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  animation: slideUp 0.2s var(--ease-out);
+  right: 0;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 30;
+  animation: popoverIn 0.35s var(--spring) both;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+
+  /* Scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+#skills-popover::-webkit-scrollbar,
+#commands-popover::-webkit-scrollbar {
+  width: 6px;
+}
+
+#skills-popover::-webkit-scrollbar-track,
+#commands-popover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#skills-popover::-webkit-scrollbar-thumb,
+#commands-popover::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 4px;
+}
+
+
+@keyframes popoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .popover-header {
   padding: 0.5rem 1rem;
+  font-size: 0.6rem;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
   color: var(--text-dim);
+  letter-spacing: 0.2em;
   border-bottom: 1px solid var(--border);
-  letter-spacing: 0.1em;
 }
 
 .skill-item {
@@ -446,10 +771,9 @@ a:hover {
   font-size: 0.9rem;
   cursor: pointer;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  transition: background 0.1s;
+  transition: all 0.25s var(--spring);
 }
 
 .cmd-item {
@@ -461,66 +785,40 @@ a:hover {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  transition: background 0.1s;
+  transition: all 0.25s var(--spring);
 }
 
 .skill-item:hover,
-.skill-item.selected {
-  background: var(--surface);
-}
-
+.skill-item.selected,
 .cmd-item:hover,
 .cmd-item.selected {
-  background: var(--surface);
+  background: var(--panel);
+  padding-left: 1.3rem;
 }
 
 .skill-item:hover .skill-name,
-.skill-item.selected .skill-name {
-  color: var(--accent);
-}
-
+.skill-item.selected .skill-name,
 .cmd-item:hover .cmd-name,
 .cmd-item.selected .cmd-name {
   color: var(--accent);
 }
 
-.skill-name {
-  font-weight: 500;
-  color: var(--text);
-  flex-shrink: 0;
-}
-
+.skill-name,
 .cmd-name {
-  font-weight: 500;
-  color: var(--text);
-  flex-shrink: 0;
+  transition: color 0.25s var(--spring);
 }
 
-.skill-desc {
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: right;
-  flex: 1;
-}
-
+.skill-desc,
 .cmd-desc {
-  font-size: 0.75rem;
   color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: right;
-  flex: 1;
+  font-size: 0.75rem;
 }
 
-/* Settings Modal */
+/* ── Modals ─────────────────────────────────────────── */
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -528,7 +826,7 @@ a:hover {
   justify-content: center;
   z-index: 100;
   opacity: 1;
-  transition: opacity 0.2s;
+  transition: opacity 0.35s var(--spring);
 }
 
 .modal.hidden {
@@ -543,65 +841,119 @@ a:hover {
   width: 90%;
   max-width: 600px;
   max-height: 85vh;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: modalIn 0.45s var(--spring-bounce) both;
 }
 
-@keyframes scaleIn {
+@keyframes modalIn {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.92) translateY(20px);
   }
 
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 
 .modal-header {
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--surface);
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-header h3 {
   font-family: var(--font-display);
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--text);
+  font-size: 1rem;
+  letter-spacing: 0.15em;
 }
 
 .modal-body {
-  padding: 0;
   overflow-y: auto;
   flex: 1;
+  /* Scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 4px;
+}
+
+/* Light mode overrides for scrollbar */
+body.theme-light .modal-body {
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+body.theme-light .modal-body::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+body.theme-light .modal-body::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+.modal-actions {
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  gap: 0.75rem;
+}
+
+/* ── Settings Sections ──────────────────────────────── */
 .settings-section {
-  padding: 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border);
+  animation: fadeSlideIn 0.4s var(--spring) both;
 }
 
-.settings-section:last-child {
-  border-bottom: none;
+.settings-section:nth-child(2) {
+  animation-delay: 0.05s;
+}
+
+.settings-section:nth-child(3) {
+  animation-delay: 0.1s;
+}
+
+.settings-section:nth-child(4) {
+  animation-delay: 0.15s;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .section-title {
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
   color: var(--text-dim);
-  margin-bottom: 1rem;
+  letter-spacing: 0.2em;
   display: block;
+  margin-bottom: 1.25rem;
 }
 
 .setting-row {
@@ -627,79 +979,6 @@ a:hover {
   line-height: 1.4;
 }
 
-/* Typing Cursor */
-.typing-cursor {
-  display: inline-block;
-  width: 0.6em;
-  height: 1em;
-  background: var(--accent);
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  animation: blink 1s infinite;
-  /* Smoother blink */
-}
-
-@keyframes blink {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.3;
-  }
-}
-
-/* 3-Square Loader */
-.loader-container {
-  display: flex;
-  justify-content: flex-start;
-  padding: 1rem 1.5rem;
-  margin-bottom: 2rem;
-  animation: slideUp 0.4s var(--ease-out);
-}
-
-.loader {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.square {
-  width: 8px;
-  height: 8px;
-  background: var(--accent);
-  opacity: 0.2;
-  animation: square-fade 1.5s infinite ease-in-out;
-}
-
-.square:nth-child(1) {
-  animation-delay: 0s;
-}
-
-.square:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.square:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes square-fade {
-
-  0%,
-  100% {
-    opacity: 0.2;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-}
-
 .setting-group {
   padding: 1.5rem;
   border-bottom: 1px solid var(--border);
@@ -714,6 +993,7 @@ a:hover {
   letter-spacing: 0.1em;
 }
 
+/* ── Inputs ─────────────────────────────────────────── */
 .text-input {
   width: 100%;
   background: var(--surface);
@@ -723,69 +1003,134 @@ a:hover {
   font-family: var(--font-body);
   font-size: 0.95rem;
   outline: none;
+  transition: all 0.35s var(--spring);
 }
 
 .text-input:focus {
   border-color: var(--accent);
-}
-
-.token-help {
-  margin-top: 0.75rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  line-height: 1.4;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
 }
 
 .select-wrapper {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .select-wrapper select {
   width: 100%;
+  appearance: none;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 1rem;
+  padding: 0.8rem 1rem;
   font-family: var(--font-body);
   font-size: 0.95rem;
-  appearance: none;
-  outline: none;
   cursor: pointer;
+  outline: none;
+  transition: all 0.35s var(--spring);
 }
 
 .select-wrapper select:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+}
+
+.select-wrapper select:hover {
+  border-color: var(--text-dim);
 }
 
 .select-icon {
   position: absolute;
-  right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 0.8rem;
   pointer-events: none;
+  color: var(--text-dim);
   width: 16px;
   height: 16px;
-  color: var(--text-dim);
+  transition: transform 0.3s var(--spring);
 }
 
-.setting-group.checkbox {
+.select-wrapper:focus-within .select-icon {
+  transform: rotate(180deg);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  transition: transform 0.3s var(--spring);
+}
+
+input[type="checkbox"]:hover {
+  transform: scale(1.15);
+}
+
+.token-help {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 0.8rem;
+  line-height: 1.5;
+}
+
+/* ── Theme Picker ───────────────────────────────────── */
+.theme-picker {
   display: flex;
-  align-items: center;
   gap: 1rem;
 }
 
-.setting-group.checkbox input {
-  width: 16px;
-  height: 16px;
-}
-
-.modal-actions {
-  padding: 1.5rem;
+.theme-swatch {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 2px solid transparent;
+  padding: 0.6rem;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.4s var(--spring);
+  transform: scale(1);
 }
 
+.theme-swatch:hover {
+  transform: scale(1.06);
+  border-color: var(--text-dim);
+}
+
+.theme-swatch:active {
+  transform: scale(0.95);
+  transition-duration: 0.1s;
+}
+
+.theme-swatch.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.08);
+}
+
+.swatch-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: block;
+  transition: box-shadow 0.4s var(--spring);
+}
+
+.theme-swatch.active .swatch-preview {
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.15);
+}
+
+.swatch-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color 0.3s var(--spring);
+}
+
+.theme-swatch.active .swatch-label {
+  color: var(--text);
+}
+
+/* ── Buttons ────────────────────────────────────────── */
 .btn-primary {
   background: var(--accent);
   color: black;
@@ -796,75 +1141,1716 @@ a:hover {
   text-transform: uppercase;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.35s var(--spring);
+  transform: scale(1);
 }
 
-/* Skeleton Loading */
-@keyframes breathe {
+.btn-primary:hover {
+  opacity: 0.85;
+  transform: scale(1.03);
+  box-shadow: 0 6px 20px rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary:active {
+  transform: scale(0.96);
+  transition-duration: 0.1s;
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid #f87171;
+  color: #f87171;
+  padding: 0.6rem 1.2rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: all 0.35s var(--spring);
+  letter-spacing: 0.05em;
+  transform: scale(1);
+}
+
+.btn-danger:hover {
+  background: rgba(248, 113, 113, 0.15);
+  border-color: #ef4444;
+  color: #ef4444;
+  transform: scale(1.03);
+}
+
+.btn-danger:active {
+  transform: scale(0.96);
+  transition-duration: 0.1s;
+}
+
+/* ── Typing Cursor ──────────────────────────────────── */
+.typing-cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 1em;
+  background: var(--accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink-cursor 0.8s ease-in-out infinite;
+}
+
+@keyframes blink-cursor {
 
   0%,
   100% {
-    opacity: 0.6;
+    opacity: 1;
   }
 
   50% {
-    opacity: 0.9;
+    opacity: 0;
+  }
+}
+
+/* ── Tool Confirm Card ──────────────────────────────── */
+.tool-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  animation: floatIn 0.4s var(--spring) both;
+  transition: border-color 0.3s var(--spring);
+}
+
+.tool-card:hover {
+  border-color: var(--text-dim);
+}
+
+.tool-card pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 0.5rem 0;
+}
+
+.btn-allow {
+  background: var(--accent);
+  color: black;
+  border: none;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.35s var(--spring);
+  transform: scale(1);
+}
+
+.btn-allow:hover {
+  opacity: 0.85;
+  transform: scale(1.04);
+}
+
+.btn-allow:active {
+  transform: scale(0.95);
+  transition-duration: 0.1s;
+}
+
+/* ── Skeleton Loading ───────────────────────────────── */
+@keyframes skeletonPulse {
+
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 0.8;
   }
 }
 
 .skeleton {
   background: var(--panel);
-  animation: breathe 2s ease-in-out infinite;
+  animation: skeletonPulse 2s ease-in-out infinite;
   color: transparent !important;
   user-select: none;
 }
 
 .skeleton-text {
-  display: inline-block;
-  min-width: 240px;
-  min-height: 1em;
+  min-width: 200px;
+  min-height: 1rem;
   border-radius: 4px;
-  /* Soft box */
 }
 
 .skeleton-chip {
-  display: inline-block;
+  width: 140px;
   height: 38px;
-  width: 150px;
-  border-radius: 0;
-  /* Boxy */
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Terminal Output ────────────────────────────────── */
+.terminal-details {
+  margin-top: 0.75rem;
+  animation: floatIn 0.35s var(--spring) both;
+}
+
+.terminal-details summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.terminal-summary {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  padding: 0.25rem 0;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: color 0.3s var(--spring);
+}
+
+.terminal-summary:hover {
+  color: var(--text);
+}
+
+.terminal-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Animated terminal window — JS-controlled slide */
+.terminal-window {
+  background: #0c0c0c;
   border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: 4px;
+  padding: 0.8rem;
+  margin-top: 0.5rem;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 300px;
+  white-space: pre;
+  color: #cccccc;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+  /* Slide animation */
+  animation: terminalSlideIn 0.45s var(--spring) both;
+  transform-origin: top;
 }
 
-.btn-primary:hover {
-  opacity: 0.9;
-}
-
-
-/* Animations */
-@keyframes slideUp {
+@keyframes terminalSlideIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    transform: scaleY(0.8);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    max-height: 300px;
+    padding-top: 0.8rem;
+    padding-bottom: 0.8rem;
+    margin-top: 0.5rem;
+    transform: scaleY(1);
   }
 }
 
-/* Keyboard Hints */
-.kbd {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: 0.7em;
-  padding: 0.1em 0.4em;
+.terminal-window::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terminal-window::-webkit-scrollbar-track {
+  background: #0c0c0c;
+}
+
+.terminal-window::-webkit-scrollbar-thumb {
+  background: #333;
   border-radius: 4px;
-  border: 1px solid var(--border);
+  transition: background 0.3s;
+}
+
+.terminal-window::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.term-cmd {
+  color: var(--accent);
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.25rem;
+}
+
+.term-out {
+  color: #cccccc;
+}
+
+.term-err {
+  color: #f87171;
+  font-weight: bold;
+}
+
+.term-status {
+  margin-right: 0.5rem;
+}
+
+.term-toggle {
+  transition: color 0.3s var(--spring);
+}
+
+/* ── Welcome Overlay ────────────────────────────────── */
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.welcome-overlay.hidden {
+  display: none !important;
+}
+
+.welcome-overlay.fade-out {
+  animation: welcomeFadeOut 0.8s var(--spring) forwards;
+}
+
+@keyframes welcomeFadeOut {
+  to {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+
+.welcome-stage {
+  text-align: center;
+  animation: welcomeStageIn 1.2s var(--spring) both;
+}
+
+@keyframes welcomeStageIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.welcome-logo-wrap {
+  animation: logoReveal 1.4s var(--spring-bounce) both;
+  animation-delay: 0.3s;
+}
+
+@keyframes logoReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-10deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.welcome-logo {
+  width: 100px;
+  height: 100px;
+  margin-bottom: 2rem;
+  filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.2));
+}
+
+.welcome-title {
+  font-family: var(--font-display);
+  font-size: 4rem;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+  animation: titleReveal 1s var(--spring) both;
+  animation-delay: 0.6s;
+}
+
+@keyframes titleReveal {
+  from {
+    opacity: 0;
+    letter-spacing: 1em;
+    filter: blur(8px);
+  }
+
+  to {
+    opacity: 1;
+    letter-spacing: 0.3em;
+    filter: blur(0px);
+  }
+}
+
+.welcome-sub {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
   color: var(--text-dim);
+  margin-bottom: 3rem;
+  letter-spacing: 0.15em;
+  animation: fadeSlideIn 0.7s var(--spring) both;
+  animation-delay: 0.9s;
+}
+
+.welcome-cta {
+  animation: ctaPulseIn 0.8s var(--spring-bounce) both;
+  animation-delay: 1.2s;
+}
+
+@keyframes ctaPulseIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+/* ── Global Keyframes ───────────────────────────────── */
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+
+/* ── Light Mode Logic ───────────────────────────────── */
+/* 1. Main UI (Landing & Chat): Dark BG, Bright Aurora, White Text, Glass Elements */
+
+body.theme-light .suggestion-chip,
+body.theme-light .composer,
+body.theme-light .navbar,
+body.theme-light .toast {
+  background: rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+body.theme-light .suggestion-chip:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: #ffffff !important;
+  transform: translateY(-2px);
+}
+
+body.theme-light input,
+body.theme-light textarea {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+body.theme-light input::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+body.theme-light .msg.user .bubble {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(10px);
+}
+
+body.theme-light .welcome-title {
+  color: #ffffff !important;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+  -webkit-text-fill-color: initial !important;
+  background: none !important;
+}
+
+body.theme-light .welcome-sub {
+  color: rgba(255, 255, 255, 0.8) !important;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+/* 2. Onboarding Modal (The Exception): White BG, Black Text */
+body.theme-light #onboard-modal {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+body.theme-light #onboard-modal .modal-content {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #000000 !important;
+}
+
+body.theme-light #onboard-modal h2,
+body.theme-light #onboard-modal p,
+body.theme-light #onboard-modal label {
+  color: #000000 !important;
+}
+
+body.theme-light #onboard-modal input {
+  background: #f4f4f5 !important;
+  border: 1px solid #e4e4e7 !important;
+  color: #000000 !important;
+}
+
+body.theme-light #onboard-modal .btn-primary {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+body.theme-light #onboard-modal .btn-primary:hover {
+  opacity: 0.8;
+  transform: scale(1.02);
+}
+
+/* ── Round 3: Light Mode Final Polish ───────────────── */
+/* 1. Remove double borders in Command Palette */
+body.theme-light .composer textarea,
+body.theme-light .composer input {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Popover overrides for Pure White */
+body.theme-light.theme-pure .popover {
+  background: #ffffff !important;
+  border: 1px solid #e5e5e5 !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  backdrop-filter: none !important;
+}
+
+body.theme-light.theme-pure .popover .cmd-item,
+body.theme-light.theme-pure .popover .skill-item {
+  border-bottom: 1px solid #f4f4f5 !important;
+}
+
+body.theme-light.theme-pure .popover .cmd-item.selected,
+body.theme-light.theme-pure .popover .skill-item.selected {
+  background: #f4f4f5 !important;
+}
+
+/* 2. Force Pure White Subtitle */
+body.theme-light .welcome-sub {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  font-weight: 500;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+/* 5. Terminal Window (Aurora Light) */
+body.theme-light:not(.theme-pure) .terminal-window {
+  background: rgba(255, 255, 255, 0.5) !important;
+  color: #000000 !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+body.theme-light:not(.theme-pure) .terminal-window .term-out {
+  color: #333333 !important;
+}
+
+body.theme-light:not(.theme-pure) .terminal-window .term-cmd {
+  color: #000000 !important;
+  font-weight: 600 !important;
+}
+
+/* 6. Popovers (Commands/Skills) - Aurora Light */
+body.theme-light:not(.theme-pure) .popover {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  color: #000000 !important;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15) !important;
+}
+
+body.theme-light:not(.theme-pure) .popover .cmd-item,
+body.theme-light:not(.theme-pure) .popover .skill-item {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+body.theme-light:not(.theme-pure) .popover .cmd-item:hover,
+body.theme-light:not(.theme-pure) .popover .cmd-item.selected,
+body.theme-light:not(.theme-pure) .popover .skill-item:hover,
+body.theme-light:not(.theme-pure) .popover .skill-item.selected {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* ── Pure White Theme Overrides (Force Black Text) ── */
+body.theme-light.theme-pure {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --panel: #f4f4f5;
+  --text: #000000;
+  --text-dim: #52525b;
+  --border: #e4e4e7;
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: #d4d4d8;
+}
+
+body.theme-light.theme-pure .welcome-title,
+body.theme-light.theme-pure .welcome-sub {
+  color: #000000 !important;
+  text-shadow: none !important;
+}
+
+body.theme-light.theme-pure .suggestion-chip {
+  background: #ffffff !important;
+  border-color: #e4e4e7 !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.theme-light.theme-pure .composer,
+body.theme-light.theme-pure .navbar,
+body.theme-light.theme-pure .settings-modal .modal-content,
+body.theme-light.theme-pure .toast {
+  background: #ffffff !important;
+  border: 1px solid #e4e4e7 !important;
+  color: #000000 !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1) !important;
+}
+
+body.theme-light.theme-pure input,
+body.theme-light.theme-pure textarea {
+  color: #000000 !important;
+  background: #f4f4f5 !important;
+  border-color: #e4e4e7 !important;
+}
+
+body.theme-light.theme-pure ::placeholder {
+  color: #a1a1aa !important;
+}
+
+body.theme-light.theme-pure .msg.user .bubble {
+  background: #f4f4f5 !important;
+  color: #000000 !important;
+  border-color: #e4e4e7 !important;
+}
+
+body.theme-light.theme-pure .icon-btn,
+body.theme-light.theme-pure .kbd {
+  color: #000000 !important;
+}
+
+/* ── Non-Pure Dark Mode Transparency (Glassy Look) ── */
+body:not(.theme-pure):not(.theme-light) .composer {
+  background: rgba(10, 10, 10, 0.4);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+body:not(.theme-pure):not(.theme-light) .suggestion-chip {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+body:not(.theme-pure):not(.theme-light) .btn-primary {
+  background: var(--accent);
+  /* Keep accent for primary buttons usually, or make them glassy? 
+       User said "background of prompt buttons transparent". 
+       Assuming suggestion chips and maybe the send button?
+    */
+}
+
+/* ── New Three-Square Loader ── */
+.loader-box {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+/* Refined Typing Indicator (Subtle Pulse) */
+.typing-square {
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent);
+  border-radius: 2px;
+  animation: typingPulse 1.4s infinite ease-in-out both;
+}
+
+.typing-square:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-square:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.typing-square:nth-child(3) {
+  animation-delay: 0s;
+}
+
+@keyframes typingPulse {
+
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+
+  50% {
+    transform: translateY(-2px);
+    /* Very subtle lift */
+    opacity: 1;
+  }
+}
+
+/* ── Settings Modal Redesign ── */
+
+/* Segmented Control for Theme Mode */
+.mode-segmented {
+  display: flex;
+  background: var(--surface);
+  padding: 4px;
+  border-radius: 8px;
+  /* Slightly rounded, not full pill */
+  border: 1px solid var(--border);
+  gap: 4px;
+}
+
+.mode-option {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s var(--spring);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mode-option:hover {
+  color: var(--text);
   background: rgba(255, 255, 255, 0.05);
-  margin-left: 0.4em;
-  vertical-align: middle;
+}
+
+.mode-option.active {
+  background: var(--panel);
+  color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+
+/* Custom Checkbox */
+.custom-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 0;
+}
+
+.custom-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s var(--spring);
+  background: var(--surface);
+}
+
+.custom-checkbox i {
+  color: var(--bg);
+  /* Checkmark color (inverted) */
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Custom Checkbox */
+/* Use higher specificity to override .setting-group label { display: block } */
+.setting-group .custom-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 0;
+  margin-bottom: 0;
+  /* Override label margin */
+  /* Reset font from generic label style */
+  font-family: var(--font-body);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text);
+}
+
+.custom-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s var(--spring);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.custom-checkbox i {
+  color: var(--bg);
+  /* Checkmark color (inverted) */
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.custom-checkbox-wrapper input {
+  display: none;
+}
+
+.custom-checkbox-wrapper input:checked+.custom-checkbox {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.custom-checkbox-wrapper input:checked+.custom-checkbox i {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.checkbox-label {
+  font-size: 0.9rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Light Mode Overrides for New Elements */
+body.theme-light .mode-segmented {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+body.theme-light .mode-option:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: inherit;
+}
+
+body.theme-light .mode-option.active {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+body.theme-light .custom-checkbox {
+  border-color: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+body.theme-light .custom-checkbox-wrapper input:checked+.custom-checkbox {
+  background: #000000;
+  /* Black accent in light mode */
+  border-color: #000000;
+}
+
+body.theme-light .custom-checkbox i {
+  color: #ffffff;
+}
+
+/* Pure Black Specifics (Command Palette / Prompts need to stay opaque) */
+body.theme-pure .composer {
+  background: #0a0a0a;
+  /* Opaque-ish */
+}
+
+/* Fix Placeholder Color in Dark Mode (Aurora) - it was black */
+body:not(.theme-light) .composer input::placeholder,
+body:not(.theme-light) .composer textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Fix Command Palette / Composer Transparency in Non-Pure Dark Mode */
+/* Make it more glassy to show Aurora - User requested "transparent" */
+body:not(.theme-pure):not(.theme-light) .composer {
+  background: rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Faint border */
+}
+
+/* Fix User Bubble Glassmorphism in Non-Pure Dark Mode */
+body:not(.theme-pure):not(.theme-light) .msg.user .bubble {
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #fff;
+}
+
+body:not(.theme-pure):not(.theme-light) .msg.user {
+  background: transparent !important;
+  border: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Fix Skeleton Chips in Aurora Dark (Semi-Transparent) */
+body:not(.theme-pure):not(.theme-light) .skeleton,
+body:not(.theme-pure):not(.theme-light) .skeleton-chip {
+  background: rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* Fix Skills/Commands Popup Glassmorphism in Non-Pure Dark Mode */
+/* Made lighter/glassier as requested */
+body:not(.theme-pure):not(.theme-light) #skills-popover,
+body:not(.theme-pure):not(.theme-light) #commands-popover {
+  background: rgba(30, 30, 30, 0.4);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Fix Popup Selection/Hover Color (Transparent White) */
+body:not(.theme-pure):not(.theme-light) .skill-item:hover,
+body:not(.theme-pure):not(.theme-light) .skill-item.selected,
+body:not(.theme-pure):not(.theme-light) .cmd-item:hover,
+body:not(.theme-pure):not(.theme-light) .cmd-item.selected {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 3. Refine Toasts (Darker Glass for Contrast against Bright Aurora) */
+body.theme-light .toast {
+  background: rgba(0, 0, 0, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  border-radius: 99px !important;
+  /* Pill shape */
+  color: #ffffff !important;
+}
+
+/* ── Round 4: Onboarding Modal Fix (Card Style) ─────── */
+/* Container: Dimmed Overlay (Show Aurora) */
+body.theme-light #onboard-modal {
+  background: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* Modal Card: Pure White Box */
+body.theme-light #onboard-modal .modal-content {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: none !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+/* Ensure text inside card is black */
+body.theme-light #onboard-modal h2,
+body.theme-light #onboard-modal p,
+body.theme-light #onboard-modal label {
+  color: #000000 !important;
+}
+
+/* Ensure input inside card is light grey */
+body.theme-light #onboard-modal input {
+  background: #f4f4f5 !important;
+  border: 1px solid #e4e4e7 !important;
+  color: #000000 !important;
+}
+
+/* Ensure button is black */
+body.theme-light #onboard-modal .btn-primary {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+/* ── Final Fix: Subtitle ID Targeting ───────────────── */
+body.theme-light #welcome-subtitle {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+/* ── Round 5: Onboarding Buttons Visibility ─────────── */
+/* Force secondary buttons (Skip/Back) to be Black on White Card */
+body.theme-light #onboard-modal button:not(.btn-primary) {
+  color: #000000 !important;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+body.theme-light #onboard-modal button:not(.btn-primary):hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Fix Onboarding Hint Color in Light Mode */
+body.theme-light #onboard-hint {
+  color: #666666 !important;
+}
+
+/* ── Round 6: Command Palette & Settings Fixes ────── */
+
+
+/* 2. Command Palette Hints & Placeholders */
+body.theme-light .composer .hint {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+body.theme-light .composer ::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+body.theme-light .kbd {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 3. Navbar Settings Icon */
+body.theme-light #settings-btn,
+body.theme-light .top .actions .icon-btn {
+  color: #ffffff !important;
+  opacity: 0.9;
+}
+
+body.theme-light #settings-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  opacity: 1;
+}
+
+/* ── Restored Toast Notifications Module ─────────── */
+/* ── Restored & Redesigned Toast Notifications (Top Right) ── */
+#toast-container {
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  /* Removed centering transforms */
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+  align-items: flex-end;
+  /* Align to right */
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1.2rem;
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  /* Pill shape */
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  box-shadow: var(--glass-shadow);
+  min-width: fit-content;
+  max-width: 400px;
+  animation: toastSlideLeft 0.4s var(--spring) both;
+}
+
+/* Status Icons (No colored borders, just icon color) */
+.toast.success i {
+  color: #4ade80;
+}
+
+.toast.error i {
+  color: #f87171;
+}
+
+.toast.info i {
+  color: #60a5fa;
+}
+
+.toast.out {
+  animation: toastFadeOut 0.3s ease forwards;
+}
+
+@keyframes toastSlideLeft {
+  from {
+    opacity: 0;
+    transform: translateX(30px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toastFadeOut {
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+
+/* ── Round 7: Settings Modal & Input Polish ───────── */
+/* ── Round 7: Settings Modal & Input Polish ───────── */
+/* 1. Settings Modal Fix (Unified Design) */
+body.theme-light #settings-modal .modal-content {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2) !important;
+  color: #000000 !important;
+}
+
+
+
+/* ── Round 7: Settings Modal & Input Polish ───────── */
+/* 1. Settings Modal Fix (Unified Design) - Pure White */
+body.theme-light.theme-pure #settings-modal .modal-content {
+  background: #ffffff !important;
+  border: 1px solid #e4e4e7 !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1) !important;
+  color: #000000 !important;
+  backdrop-filter: none !important;
+}
+
+/* 1b. Settings Modal Fix (Unified Design) - Aurora Light (Force Match Pure White) */
+/* This ensures the modal looks IDENTICAL to Pure White mode even in Aurora Light */
+body.theme-light:not(.theme-pure) #settings-modal .modal-content {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2) !important;
+  color: #000000 !important;
+  backdrop-filter: none !important;
+}
+
+/* Force black text for everything inside the Settings Modal in Aurora Light */
+body.theme-light:not(.theme-pure) #settings-modal,
+body.theme-light:not(.theme-pure) #settings-modal h3,
+body.theme-light:not(.theme-pure) #settings-modal label,
+body.theme-light:not(.theme-pure) #settings-modal p,
+body.theme-light:not(.theme-pure) #settings-modal .section-title,
+body.theme-light:not(.theme-pure) #settings-modal .setting-note,
+body.theme-light:not(.theme-pure) #settings-modal .checkbox-label {
+  color: #000000 !important;
+  text-shadow: none !important;
+}
+
+/* Force light inputs in Settings Modal for Aurora Light */
+body.theme-light:not(.theme-pure) #settings-modal input,
+body.theme-light:not(.theme-pure) #settings-modal select,
+body.theme-light:not(.theme-pure) #settings-modal .theme-btn {
+  background: #f4f4f5 !important;
+  border: 1px solid #e4e4e7 !important;
+  color: #000000 !important;
+}
+
+/* Force Theme Swatches to look correct in Aurora Light Settings */
+body.theme-light:not(.theme-pure) #settings-modal .theme-swatch {
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+body.theme-light:not(.theme-pure) #settings-modal .theme-swatch.active {
+  border: 2px solid #000000 !important;
+}
+
+body.theme-light:not(.theme-pure) #settings-modal .swatch-label {
+  color: #52525b !important;
+}
+
+/* Force "Apply Changes" Button to Pure Black in Aurora Light Settings */
+body.theme-light:not(.theme-pure) #settings-modal #save-settings {
+  background: #000000 !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Force correct icon colors in Selects for Aurora Light Settings */
+body.theme-light:not(.theme-pure) #settings-modal .select-icon {
+  color: #52525b !important;
+}
+
+/* Force correct colors for Inactive Mode Toggle in Aurora Light Settings */
+body.theme-light:not(.theme-pure) #settings-modal .mode-option:not(.active) {
+  color: #52525b !important;
+}
+
+/* 2. Theme Toggle Buttons */
+body.theme-light .theme-btn {
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+body.theme-light .theme-btn.active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #e4e4e7 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 3. Checkboxes & Swatches */
+body.theme-light input[type='checkbox'] {
+  accent-color: #000000;
+  filter: none;
+}
+
+body.theme-light .theme-swatch {
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+body.theme-light .theme-swatch.active {
+  border: 2px solid #000000 !important;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Final Sweep: Force All Gray to White in Light Mode ─ */
+body.theme-light {
+  --text-dim: #52525b;
+  --text: #000000;
+  --accent: #000000;
+  color: #000000;
+}
+
+/* ── Pure White Theme Overrides (Force Black Text & Solid BG) ── */
+body.theme-light.theme-pure,
+body.theme-light.theme-pure #aurora-bg {
+  background: #ffffff !important;
+  opacity: 1 !important;
+  /* Remove any vignette/gradient */
+  background-image: none !important;
+}
+
+body.theme-light.theme-pure {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --panel: #f4f4f5;
+  --text: #000000;
+  --text-dim: #52525b;
+  --border: #e4e4e7;
+  --glass-bg: #ffffff;
+  --glass-border: #d4d4d8;
+}
+
+body.theme-light.theme-pure .welcome-title,
+body.theme-light.theme-pure .welcome-sub {
+  color: #000000 !important;
+  text-shadow: none !important;
+}
+
+body.theme-light.theme-pure .suggestion-chip {
+  background: #ffffff !important;
+  border-color: #e4e4e7 !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Make Navbar and Composer opaque white in Pure White mode for consistency */
+body.theme-light.theme-pure .composer,
+body.theme-light.theme-pure .navbar {
+  background: #ffffff !important;
+  border: 1px solid #e4e4e7 !important;
+  color: #000000 !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1) !important;
+  backdrop-filter: none !important;
+  border-radius: var(--radius-lg) !important;
+  /* Reverted to standard radius */
+}
+
+body.theme-light.theme-pure .toast {
+  background: #ffffff !important;
+  border: 1px solid #e4e4e7 !important;
+  color: #000000 !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1) !important;
+  backdrop-filter: none !important;
+  border-radius: 99px !important;
+  /* Pill shape for toast */
+}
+
+body.theme-light.theme-pure input,
+body.theme-light.theme-pure textarea {
+  color: #000000 !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+/* Fix Hints and Placeholders in Pure White */
+body.theme-light.theme-pure ::placeholder {
+  color: #a1a1aa !important;
+}
+
+body.theme-light.theme-pure .hint,
+body.theme-light.theme-pure .sub {
+  color: #71717a !important;
+}
+
+body.theme-light.theme-pure .msg.user .bubble {
+  background: #f4f4f5 !important;
+  color: #000000 !important;
+  border-color: #e4e4e7 !important;
+}
+
+/* ── Crucial Fixes for Pure White Text Visibility (Logo, Navbar) ── */
+body.theme-light.theme-pure .logo,
+body.theme-light.theme-pure .subtitle,
+body.theme-light.theme-pure .mark,
+body.theme-light.theme-pure #settings-btn,
+body.theme-light.theme-pure .icon-btn,
+body.theme-light.theme-pure .kbd {
+  color: #000000 !important;
+  text-shadow: none !important;
+  -webkit-text-fill-color: initial !important;
+}
+
+/* Ensure settings button hover state remains visible */
+body.theme-light.theme-pure #settings-btn:hover,
+body.theme-light.theme-pure .icon-btn:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #000000 !important;
+}
+
+/* Fix Model Output Text in Pure White */
+body.theme-light.theme-pure .msg.assistant,
+body.theme-light.theme-pure .msg.assistant p,
+body.theme-light.theme-pure .msg.assistant li,
+body.theme-light.theme-pure .msg.assistant strong,
+body.theme-light.theme-pure .msg.assistant em,
+body.theme-light.theme-pure .msg.assistant h1,
+body.theme-light.theme-pure .msg.assistant h2,
+body.theme-light.theme-pure .msg.assistant h3,
+body.theme-light.theme-pure .msg.assistant h4,
+body.theme-light.theme-pure .msg.assistant h5,
+body.theme-light.theme-pure .msg.assistant h6 {
+  color: #000000 !important;
+}
+
+body.theme-light.theme-pure .msg.assistant code {
+  background: #f4f4f5 !important;
+  color: #000000 !important;
+  border: 1px solid #e4e4e7 !important;
+}
+
+body.theme-light.theme-pure .msg.assistant pre {
+  background: #f4f4f5 !important;
+  border: 1px solid #e4e4e7 !important;
+}
+
+body.theme-light.theme-pure .msg.assistant pre code {
+  background: transparent !important;
+  border: none !important;
+  color: #000000 !important;
+}
+
+/* Fix "Pure" Theme Swatch in Light Mode */
+body.theme-light.theme-pure .theme-swatch[data-theme='pure'] .swatch-preview,
+body.theme-light .theme-swatch[data-theme='pure'] .swatch-preview {
+  background: #ffffff !important;
+  border: 1px solid #e4e4e7 !important;
+}
+
+body.theme-light .theme-swatch[data-theme='pure'].active .swatch-preview {
+  border-color: #000000 !important;
+  box-shadow: inset 0 0 0 2px #000000 !important;
+}
+
+/* ── Crucial Fix for Subtitle in Pure White ── */
+/* Use ID selector for maximum specificity */
+body.theme-light.theme-pure #welcome-subtitle,
+body.theme-light.theme-pure .subtitle {
+  color: #000000 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  -webkit-text-fill-color: initial !important;
+}
+
+/* Fix "Apply Changes" Button Text in Pure White */
+body.theme-light.theme-pure .btn-primary,
+body.theme-light.theme-pure #save-settings {
+  color: #ffffff !important;
+  background: #000000 !important;
+  /* Ensure black bg for white text */
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1) !important;
+}
+
+.toast.success i {
+  color: #22c55e;
+}
+
+.toast.error i {
+  color: #ef4444;
+}
+
+.toast.info i {
+  color: #3b82f6;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastOut {
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+
+/* ── Final Safety Fix: Aurora Light Mode (Non-Pure) ── */
+/* Ensure text/placeholders are WHITE in Aurora Light, overriding any leaks */
+body.theme-light:not(.theme-pure) {
+  --text: #ffffff;
+  --text-dim: rgba(255, 255, 255, 0.8);
+  --accent: #ffffff;
+  color: #ffffff;
+}
+
+body.theme-light:not(.theme-pure) ::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+body.theme-light:not(.theme-pure) .suggestion-chip,
+body.theme-light:not(.theme-pure) .composer .hint,
+body.theme-light:not(.theme-pure) .icon-btn,
+body.theme-light:not(.theme-pure) .kbd,
+body.theme-light:not(.theme-pure) .sub,
+body.theme-light:not(.theme-pure) .logo,
+body.theme-light:not(.theme-pure) .subtitle {
+  color: #ffffff !important;
+  opacity: 0.9;
+}
+
+/* Ensure Suggestion Chips have white text */
+body.theme-light:not(.theme-pure) .suggestion-chip {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Ensure Input/Textarea Backgrounds are Transparent White in Aurora Light */
+/* Ensure Input/Textarea Backgrounds are Transparent White in Aurora Light */
+/* Reduced opacity to 0.05 + 16px blur for proper glass effect */
+body.theme-light:not(.theme-pure) input,
+body.theme-light:not(.theme-pure) textarea,
+body.theme-light:not(.theme-pure) .composer {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(16px);
+}
+
+/* Force Inner Input to be Transparent (No Double Box) */
+body.theme-light:not(.theme-pure) .composer input,
+body.theme-light:not(.theme-pure) .composer textarea,
+body.theme-light:not(.theme-pure) #input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Fix Skeleton Chips in Aurora Light to be White/Glassy */
+body.theme-light:not(.theme-pure) .skeleton,
+body.theme-light:not(.theme-pure) .skeleton-chip {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Aurora Light — Glassmorphism Consistency Overrides
+   Fixes: code blocks, popovers, bubbles, toasts,
+   terminal output, tool cards, modals
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Code Blocks: Glassy instead of black ──────────── */
+body.theme-light:not(.theme-pure) .msg.assistant code {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(4px);
+}
+
+body.theme-light:not(.theme-pure) .msg.assistant pre {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+body.theme-light:not(.theme-pure) .msg.assistant pre code {
+  background: transparent !important;
+  border: none !important;
+  color: #ffffff !important;
+}
+
+/* ── Skills & Commands Popover: Glassmorphic ───────── */
+body.theme-light:not(.theme-pure) #skills-popover,
+body.theme-light:not(.theme-pure) #commands-popover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.15) !important;
+}
+
+body.theme-light:not(.theme-pure) .skill-item:hover,
+body.theme-light:not(.theme-pure) .skill-item.selected,
+body.theme-light:not(.theme-pure) .cmd-item:hover,
+body.theme-light:not(.theme-pure) .cmd-item.selected {
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+body.theme-light:not(.theme-pure) .skill-name,
+body.theme-light:not(.theme-pure) .cmd-name {
+  color: #ffffff !important;
+}
+
+body.theme-light:not(.theme-pure) .skill-desc,
+body.theme-light:not(.theme-pure) .cmd-desc {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+body.theme-light:not(.theme-pure) .popover-header {
+  color: rgba(255, 255, 255, 0.6) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* ── User Bubble: Glassy ───────────────────────────── */
+body.theme-light:not(.theme-pure) .msg.user .bubble {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── Toast Notifications: Glassy ───────────────────── */
+body.theme-light:not(.theme-pure) .toast {
+  background: rgba(255, 255, 255, 0.12) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+/* ── Terminal Output: Aurora Light ─────────────────── */
+body.theme-light:not(.theme-pure) .term-toggle {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+body.theme-light:not(.theme-pure) .terminal-summary:hover .term-toggle {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+body.theme-light:not(.theme-pure) .term-chevron {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+body.theme-light:not(.theme-pure) .terminal-window {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(20px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+body.theme-light:not(.theme-pure) .term-cmd {
+  color: rgba(0, 0, 0, 0.85) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+
+
+body.theme-light:not(.theme-pure) .term-out {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+body.theme-light:not(.theme-pure) .term-err {
+  color: #dc2626 !important;
+}
+
+
+/* ── Tool Card: Glassy ─────────────────────────────── */
+body.theme-light:not(.theme-pure) .tool-card {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+body.theme-light:not(.theme-pure) .tool-card pre {
+  background: rgba(0, 0, 0, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+body.theme-light:not(.theme-pure) .btn-allow {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #000000 !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+body.theme-light:not(.theme-pure) .btn-deny {
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* ── Tool Executing Status: White text ─────────────── */
+body.theme-light:not(.theme-pure) .tool-executing {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+body.theme-light:not(.theme-pure) .msg.tool {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* ── Settings Modal Close Button (Aurora Light) ────── */
+body.theme-light:not(.theme-pure) #settings-modal .icon-btn,
+body.theme-light:not(.theme-pure) #settings-modal #close-settings {
+  color: #000000 !important;
+}
+
+/* ── Navbar Glass: Ensure consistency ──────────────── */
+body.theme-light:not(.theme-pure) .top {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Pure White — Solid Overrides for New Components
+   ═══════════════════════════════════════════════════════ */
+
+/* Terminal in Pure White */
+body.theme-light.theme-pure .term-toggle {
+  color: #71717a !important;
+}
+
+body.theme-light.theme-pure .term-chevron {
+  color: #71717a !important;
+}
+
+body.theme-light.theme-pure .terminal-window {
+  background: #f1f1f3 !important;
+  border-color: #e0e0e4 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: #27272a !important;
+}
+
+body.theme-light.theme-pure .term-cmd {
+  color: #18181b !important;
+  border-bottom-color: #e0e0e4 !important;
+}
+
+
+
+
+body.theme-light.theme-pure .term-out {
+  color: #3f3f46 !important;
+}
+
+body.theme-light.theme-pure .term-err {
+  color: #dc2626 !important;
+}
+
+
+/* Tool Card in Pure White */
+body.theme-light.theme-pure .tool-card {
+  background: #ffffff !important;
+  border-color: #e4e4e7 !important;
+  color: #000000 !important;
+}
+
+body.theme-light.theme-pure .tool-card pre {
+  background: #f4f4f5 !important;
+  border-color: #e4e4e7 !important;
+  color: #000000 !important;
+}
+
+/* Tool Status in Pure White */
+
+/* Allow/Deny buttons in Pure White */
+body.theme-light.theme-pure .btn-allow {
+  background: #18181b !important;
+  color: #ffffff !important;
+  border-color: #18181b !important;
+}
+
+body.theme-light.theme-pure .btn-deny {
+  color: #18181b !important;
+  border-color: #d4d4d8 !important;
+}
+
+body.theme-light.theme-pure .tool-executing {
+  color: #52525b !important;
+}
+
+body.theme-light.theme-pure .msg.tool {
+  color: #52525b !important;
+}
+
+/* Popovers in Pure White */
+body.theme-light.theme-pure #skills-popover,
+body.theme-light.theme-pure #commands-popover {
+  background: #ffffff !important;
+  border-color: #e4e4e7 !important;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.08) !important;
+  backdrop-filter: none !important;
+}
+
+body.theme-light.theme-pure .skill-item:hover,
+body.theme-light.theme-pure .skill-item.selected,
+body.theme-light.theme-pure .cmd-item:hover,
+body.theme-light.theme-pure .cmd-item.selected {
+  background: #f4f4f5 !important;
+}
+
+body.theme-light.theme-pure .skill-name,
+body.theme-light.theme-pure .cmd-name {
+  color: #000000 !important;
+}
+
+body.theme-light.theme-pure .skill-desc,
+body.theme-light.theme-pure .cmd-desc {
+  color: #71717a !important;
+}
+
+body.theme-light.theme-pure .popover-header {
+  color: #71717a !important;
+  border-bottom-color: #e4e4e7 !important;
 }

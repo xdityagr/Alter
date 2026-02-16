@@ -19,8 +19,9 @@ def make_shell_tool(policy: ShellPolicy) -> Tool:
         id="shell.run",
         name="Run Command",
         description=(
-            "Run an allowlisted executable with arguments. "
-            "This is confirmation-gated by default."
+            "Run an allowlisted executable with arguments. output is captured. "
+            "This is NON-INTERACTIVE; unknown prompts will fail. "
+            "ALWAYS use 'yes' flags (e.g. -y, --yes, /f) to suppress confirmations."
         ),
         inputs_schema={
             "type": "object",

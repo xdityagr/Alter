@@ -413,6 +413,43 @@ def auth(provider: str = typer.Argument("github", help="Auth provider (default: 
         rprint(f"[red]Auth failed:[/red] {e}")
 
 
+@app.command()
+def reset(force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation.")):
+    """
+    Reset Alter's state by clearing memory and audit logs.
+    """
+    data_dir = Path("data")
+    if not data_dir.exists():
+        rprint("[yellow]No data directory found.[/yellow]")
+        return
+
+    # Identify files to delete
+    targets = list(data_dir.glob("*.sqlite3*")) + list(data_dir.glob("*.jsonl"))
+    
+    if not targets:
+        rprint("[green]Data directory is already clean.[/green]")
+        return
+        
+    rprint(f"[bold red]WARNING:[/bold red] This will delete {len(targets)} files from '{data_dir}':")
+    for t in targets:
+        rprint(f"  - {t.name}")
+        
+    if not force:
+        if not Confirm.ask("\nAre you sure you want to delete these files?"):
+            rprint("[dim]Aborted.[/dim]")
+            return
+            
+    # Delete
+    for t in targets:
+        try:
+            t.unlink()
+            rprint(f"[dim]Deleted {t.name}[/dim]")
+        except Exception as e:
+            rprint(f"[red]Failed to delete {t.name}: {e}[/red]")
+            
+    rprint("\n[green]Reset complete. You can now restart `alter run`.[/green]")
+
+
 def _print_tool_request(tr: ToolRequest) -> None:
     rprint("[yellow]Tool requested[/yellow]")
     rprint(f"  id: {tr.tool_id}")

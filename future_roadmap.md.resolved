@@ -1,0 +1,54 @@
+# AlterAgent: The Next Level 🚀
+
+You asked for features to take Alter to the "next level of agentic automation". Here is a strategic roadmap to evolve Alter from a **reactive assistant** into a **proactive autonomous system**.
+
+## 1. Event-Driven "Watch Mode" (Proactive Agency)
+Currently, Alter waits for you to type. True agency means **reacting to the environment**.
+
+- **Triggers**: "When a file changes in `./src`, run tests."
+- **Schedule**: "Every morning at 9 AM, summarize my unread emails and check wait times for my commute."
+- **Monitors**: "Watch `server.log` and alert me if an error appears."
+- **Implementation**: A background `Watcher` thread that feeds events into the Agent loop as "system messages".
+
+## 2. Model Context Protocol (MCP) Support
+Don't build custom tools for everything. Adopt the standard.
+
+- **What is it?**: An open standard (by Anthropic) for connecting AI to data sources.
+- **Benefit**: instantly gain access to hundreds of existing MCP servers (PostgreSQL, Slack, GitHub, Google Drive, Linear, etc.).
+- **Implementation**: Add an `McpClient` to `core/tools` that can connect to any local MCP server and dynamically register its tools.
+
+## 3. Vision & Screen Sense ("See what I see")
+Text is limiting. Provide visual context.
+
+- **Screenshot Tool**: `screen.capture` to take a screenshot and analyze it with a Vision-Language Model (VLM) like Qwen-VL or LLaVA.
+- **Continuous Sense**: A "Check Mode" where Alter takes a screenshot every 5 seconds to track UI changes during a long task (e.g., watching a deploy progress bar).
+- **Outcome**: "Click that blue button" becomes a valid command.
+
+## 4. Knowledge Graph Memory
+Vector search (RAG) is fuzzy. Graph memory is structured.
+
+- **Current**: "I think I saw a file named [auth.py](file:///c:/Users/Aditya/Projects/AlterAgent/tests/test_auth.py)..." (Vector similarity)
+- **Next Level**: "Profile -> has_preference -> 'Next.js' -> AND -> Project -> uses -> 'Tailwind'" (Graph)
+- **Tech**: Use `NetworkX` or a lightweight graph DB (Kùzu / Neo4j) to store entities and relationships extracted from conversation.
+- **Benefit**: Perfect recall of complex constraints and project structures.
+
+## 5. Multi-Agent Swarm (Orchestration)
+One LLM context cannot hold an entire repo.
+
+- **Manager Agent**: Breaks down a high-level goal ("Refactor the auth system").
+- **Researcher Agent**: Scans files and maps dependencies.
+- **Coder Agent**: Writes the code (already partially implemented!).
+- **Reviewer Agent**: Critiques the code against best practices.
+- **Implementation**: A `Swarm` class that manages message passing between specialize sub-agents.
+
+## 6. Voice Mode (Real-time)
+Stop typing.
+
+- **STT/TTS**: Integrate Whisper (local) and a high-quality TTS (Kokoro / Piper).
+- **Wake Word**: "Hey Alter".
+- **Benefit**: Hands-free coding assistant while you look at the screen.
+
+---
+
+### Recommended Next Step
+**Implement #1 (Event-Driven Watch Mode)**. It fundamentally changes the relationship from "User drives Agent" to "Agent drives alongside User".

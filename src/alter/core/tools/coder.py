@@ -34,7 +34,7 @@ def make_coder_tool(cfg: AlterConfig, llm: Llm, auditor: Auditor) -> Tool:
         # AgentSession.run_turn handles the loop!
         
         try:
-            result = session.run_turn(user_message=prompt, max_steps=15) # Give it plenty of steps
+            result = session.run_turn(user_message=prompt, max_steps=30) # Give it plenty of steps
             
             if isinstance(result, FinalResponse):
                 return ToolResult(status="success", stdout=result.content)
@@ -55,7 +55,7 @@ def make_coder_tool(cfg: AlterConfig, llm: Llm, auditor: Auditor) -> Tool:
                 "properties": {
                     "task": {
                         "type": "string",
-                        "description": "Detailed instructions for the coding task."
+                        "description": "Detailed instructions for the coding task. If omitted, the agent will infer the task from the conversation history."
                     },
                     "files": {
                         "type": "array",
@@ -63,9 +63,9 @@ def make_coder_tool(cfg: AlterConfig, llm: Llm, auditor: Auditor) -> Tool:
                         "description": "List of relevant file paths to focus on."
                     }
                 },
-                "required": ["task"]
+                "additionalProperties": False,
             },
             confirm=True, # Always confirm delegation to a powerful agent
         ),
-        action=lambda inputs: run_coder_task(inputs["task"], inputs.get("files")),
+        action=lambda inputs: run_coder_task(inputs.get("task") or "Review the conversation history and fulfill the user's latest request.", inputs.get("files")),
     )

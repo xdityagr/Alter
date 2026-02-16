@@ -19,6 +19,20 @@
 </head>
 
 <body>
+  <canvas id="aurora-bg"></canvas>
+
+  <!-- Welcome Overlay (fresh users) -->
+  <section id="welcome-flow" class="welcome-overlay hidden">
+    <div class="welcome-stage">
+      <div class="welcome-logo-wrap">
+        <img src="/assets/assets/logo.png" class="welcome-logo" alt="Alter" />
+      </div>
+      <h1 class="welcome-title">ALTER</h1>
+      <p class="welcome-sub">Your local AI companion</p>
+      <button id="welcome-begin" class="btn-primary welcome-cta">BEGIN SETUP</button>
+    </div>
+  </section>
+
   <div id="app">
 
     <!-- Landing State -->
@@ -67,13 +81,18 @@
 
       <div class="composer-wrapper" id="composer-wrapper">
         <div class="composer">
-          <input id="input" type="text" autocomplete="off" placeholder="Command..." />
+          <textarea id="input" rows="1" autocomplete="off" placeholder="Command..."></textarea>
           <div class="composer-actions">
             <span class="hint"><span class="kbd">/</span> to focus</span>
             <button id="send" class="icon-btn"><i data-lucide="arrow-right"></i></button>
           </div>
         </div>
+      </div>
     </section>
+    </section>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
   </div>
 
   <!-- Settings Modal -->
@@ -118,12 +137,68 @@
         <div class="settings-section">
           <span class="section-title">BEHAVIOR</span>
 
-          <div class="setting-group checkbox" style="border:none; padding:0;">
-            <input type="checkbox" id="auto-confirm-check" />
-            <label for="auto-confirm-check" style="margin:0; cursor:pointer;">Auto-confirm tools (Session)</label>
+          <div class="setting-group" style="padding:0; border:none;">
+            <label class="custom-checkbox-wrapper">
+              <input type="checkbox" id="auto-confirm-check" />
+              <div class="custom-checkbox">
+                <i data-lucide="check" style="width:14px; height:14px; stroke-width:3px;"></i>
+              </div>
+              <span class="checkbox-label">Auto-confirm tools (Session)</span>
+            </label>
+            <div class="setting-note" style="margin-left: 2rem; margin-top:0;">
+              Skip manual approval for safe tools (read-only). Risky tools will still ask.
+            </div>
           </div>
-          <div class="setting-note" style="margin-left: 2rem;">
-            Skip manual approval for safe tools (read-only). Risky tools will still ask.
+        </div>
+
+        <!-- Section: Theme -->
+        <div class="settings-section">
+          <span class="section-title">THEME</span>
+          <div class="theme-picker" style="flex-wrap: wrap;">
+            <button class="theme-swatch active" data-theme="void" title="Void">
+              <span class="swatch-preview" style="background: linear-gradient(135deg, #6b21a8, #0ea5e9)"></span>
+              <span class="swatch-label">Void</span>
+            </button>
+            <button class="theme-swatch" data-theme="ember" title="Ember">
+              <span class="swatch-preview" style="background: linear-gradient(135deg, #dc2626, #f59e0b)"></span>
+              <span class="swatch-label">Ember</span>
+            </button>
+            <button class="theme-swatch" data-theme="arctic" title="Arctic">
+              <span class="swatch-preview" style="background: linear-gradient(135deg, #06b6d4, #3b82f6)"></span>
+              <span class="swatch-label">Arctic</span>
+            </button>
+            <button class="theme-swatch" data-theme="pure" title="Pure">
+              <span class="swatch-preview" style="background: #000000"></span>
+              <!-- Will be inverted by CSS in light mode -->
+              <span class="swatch-label">Pure</span>
+            </button>
+
+            <div class="theme-divider" style="width:100%; height:1px; background:var(--border); margin: 0.5rem 0;">
+            </div>
+
+            <div style="width:100%">
+              <span class="section-title" style="margin-bottom:0.5rem">APPEARANCE MODE</span>
+              <div class="mode-segmented">
+                <button class="mode-option" id="mode-dark">
+                  <i data-lucide="moon" style="width:14px;"></i> Dark
+                </button>
+                <button class="mode-option" id="mode-light">
+                  <i data-lucide="sun" style="width:14px;"></i> Light
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Memory -->
+        <div class="settings-section">
+          <span class="section-title">MEMORY</span>
+          <div class="setting-row">
+            <label>Reset Memory</label>
+            <div class="setting-note" style="margin-bottom: 0.75rem;">
+              Wipe all stored memories, identities, and state. This cannot be undone.
+            </div>
+            <button id="memory-reset-btn" class="btn-danger">RESET ALL MEMORY</button>
           </div>
         </div>
       </div>

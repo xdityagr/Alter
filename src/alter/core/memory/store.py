@@ -3,12 +3,16 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import struct
 import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .embeddings import Embedder
 
 
 def _utc_now() -> str:
@@ -34,12 +38,8 @@ class MemoryEvent:
 
 class MemoryStore:
     """
-    Minimal persistent memory store.
-
-    Design goals:
-    - Only stores raw user messages + tool results (ground truth), not LLM summaries.
-    - Supports simple retrieval to ground long runs.
-    - Works without external dependencies (SQLite in stdlib).
+    Persistent memory store with FTS5 keyword search and sqlite-vec
+    semantic search, merged via Reciprocal Rank Fusion.
     """
 
     def __init__(self, *, path: Path, redact_secrets: bool = True):
@@ -50,6 +50,7 @@ class MemoryStore:
         self._conn.execute("PRAGMA journal_mode=WAL;")
         self._conn.execute("PRAGMA synchronous=NORMAL;")
         self._fts_enabled = False
+        self._vec_enabled = False
         self._redact_secrets = bool(redact_secrets)
         self._init_db()
 
@@ -68,10 +69,19 @@ class MemoryStore:
                   session_id TEXT,
                   kind TEXT NOT NULL,
                   content TEXT NOT NULL,
-                  meta_json TEXT NOT NULL
+                  meta_json TEXT NOT NULL,
+                  summarised INTEGER DEFAULT 0
                 )
                 """
             )
+            # Add 'summarised' column if table already exists without it
+            try:
+                self._conn.execute(
+                    "ALTER TABLE memory_events ADD COLUMN summarised INTEGER DEFAULT 0"
+                )
+            except Exception:
+                pass  # column already exists
+
             # Optional FTS5 index for better retrieval.
             try:
                 self._conn.execute(
@@ -83,7 +93,25 @@ class MemoryStore:
                 self._fts_enabled = True
             except Exception:
                 self._fts_enabled = False
+
+            # sqlite-vec for semantic search
+            try:
+                import sqlite_vec
+                self._conn.enable_load_extension(True)
+                sqlite_vec.load(self._conn)
+                self._conn.enable_load_extension(False)
+                self._conn.execute(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS vec_memory USING vec0(embedding float[384])"
+                )
+                self._vec_enabled = True
+            except Exception:
+                self._vec_enabled = False
+
             self._conn.commit()
+
+    # -----------------------------------------------------------------
+    # Write
+    # -----------------------------------------------------------------
 
     def add_event(
         self,
@@ -95,6 +123,7 @@ class MemoryStore:
         meta: dict[str, Any] | None = None,
         ts: str | None = None,
         id: str | None = None,
+        embedding: bytes | None = None,
     ) -> MemoryEvent:
         meta2 = dict(meta or {})
         content2 = content or ""
@@ -123,8 +152,23 @@ class MemoryStore:
                     "INSERT INTO memory_events_fts (content, id, owner, kind, session_id) VALUES (?, ?, ?, ?, ?)",
                     (ev.content, ev.id, ev.owner, ev.kind, ev.session_id),
                 )
+            if self._vec_enabled and embedding is not None:
+                # Use the integer rowid from memory_events
+                cur = self._conn.execute(
+                    "SELECT rowid FROM memory_events WHERE id = ?", (ev.id,)
+                )
+                row = cur.fetchone()
+                if row:
+                    self._conn.execute(
+                        "INSERT INTO vec_memory (rowid, embedding) VALUES (?, ?)",
+                        (row[0], embedding),
+                    )
             self._conn.commit()
         return ev
+
+    # -----------------------------------------------------------------
+    # Read
+    # -----------------------------------------------------------------
 
     def recent(
         self,
@@ -209,6 +253,233 @@ class MemoryStore:
             rows = cur.fetchall()
         return [self._row_to_event(r) for r in rows]
 
+    # -----------------------------------------------------------------
+    # Semantic search via sqlite-vec
+    # -----------------------------------------------------------------
+
+    def semantic_search(
+        self,
+        *,
+        owner: str,
+        query_embedding: bytes,
+        limit: int = 8,
+        kinds: list[str] | None = None,
+    ) -> list[tuple[MemoryEvent, float]]:
+        """KNN search via sqlite-vec MATCH.  Returns (event, distance) pairs."""
+        if not self._vec_enabled:
+            return []
+
+        with self._lock:
+            # sqlite-vec returns rowid + distance
+            cur = self._conn.execute(
+                """
+                SELECT rowid, distance
+                FROM vec_memory
+                WHERE embedding MATCH ?
+                ORDER BY distance
+                LIMIT ?
+                """,
+                (query_embedding, limit * 3),  # over-fetch to filter by owner/kind
+            )
+            vec_rows = cur.fetchall()
+
+            if not vec_rows:
+                return []
+
+            # Map rowids back to memory_events
+            rowids = [r[0] for r in vec_rows]
+            dist_map = {r[0]: r[1] for r in vec_rows}
+            placeholders = ",".join(["?"] * len(rowids))
+
+            kinds_filter = ""
+            kind_params: list[Any] = []
+            if kinds:
+                kind_ph = ",".join(["?"] * len(kinds))
+                kinds_filter = f" AND kind IN ({kind_ph})"
+                kind_params = list(kinds)
+
+            cur2 = self._conn.execute(
+                f"""
+                SELECT rowid, id, ts, owner, session_id, kind, content, meta_json
+                FROM memory_events
+                WHERE rowid IN ({placeholders}) AND owner = ?{kinds_filter}
+                """,
+                (*rowids, owner, *kind_params),
+            )
+            results: list[tuple[MemoryEvent, float]] = []
+            for row in cur2.fetchall():
+                rid = row[0]
+                ev = self._row_to_event(row[1:])
+                results.append((ev, dist_map.get(rid, 999.0)))
+
+        # Sort by distance (ascending = most similar)
+        results.sort(key=lambda x: x[1])
+        return results[:limit]
+
+    # -----------------------------------------------------------------
+    # Hybrid search (FTS + semantic via RRF)
+    # -----------------------------------------------------------------
+
+    def hybrid_search(
+        self,
+        *,
+        owner: str,
+        query: str,
+        embedder: "Embedder",
+        limit: int = 8,
+        kinds: list[str] | None = None,
+    ) -> list[MemoryEvent]:
+        """Merge FTS keyword hits and semantic KNN hits using Reciprocal Rank Fusion."""
+        # 1. FTS results
+        fts_events = self.search(owner=owner, query=query, limit=limit, kinds=kinds)
+
+        # 2. Semantic results (if vec is enabled)
+        sem_events: list[MemoryEvent] = []
+        if self._vec_enabled:
+            try:
+                q_emb = embedder.encode(query)
+                sem_results = self.semantic_search(
+                    owner=owner,
+                    query_embedding=q_emb,
+                    limit=limit,
+                    kinds=kinds,
+                )
+                sem_events = [ev for ev, _ in sem_results]
+            except Exception:
+                pass
+
+        if not sem_events:
+            return fts_events
+        if not fts_events:
+            return sem_events
+
+        # 3. Reciprocal Rank Fusion
+        k = 60  # standard RRF constant
+        scores: dict[str, float] = {}
+        event_map: dict[str, MemoryEvent] = {}
+
+        for rank, ev in enumerate(fts_events):
+            scores[ev.id] = scores.get(ev.id, 0.0) + 1.0 / (k + rank + 1)
+            event_map[ev.id] = ev
+
+        for rank, ev in enumerate(sem_events):
+            scores[ev.id] = scores.get(ev.id, 0.0) + 1.0 / (k + rank + 1)
+            event_map[ev.id] = ev
+
+        # Sort by fused score descending
+        ranked_ids = sorted(scores.keys(), key=lambda i: scores[i], reverse=True)
+        return [event_map[i] for i in ranked_ids[:limit]]
+
+    # -----------------------------------------------------------------
+    # Compaction helpers
+    # -----------------------------------------------------------------
+
+    def prune_embeddings(self, *, before_ts: str) -> int:
+        """Delete vec_memory rows for events older than before_ts."""
+        if not self._vec_enabled:
+            return 0
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT rowid FROM memory_events WHERE ts < ?", (before_ts,)
+            )
+            rowids = [r[0] for r in cur.fetchall()]
+            if not rowids:
+                return 0
+            ph = ",".join(["?"] * len(rowids))
+            self._conn.execute(f"DELETE FROM vec_memory WHERE rowid IN ({ph})", rowids)
+            self._conn.commit()
+        return len(rowids)
+
+    def oldest_unsummarised(
+        self, *, owner: str, limit: int = 50
+    ) -> list[MemoryEvent]:
+        """Return oldest events not yet covered by a compaction summary."""
+        with self._lock:
+            cur = self._conn.execute(
+                """
+                SELECT id, ts, owner, session_id, kind, content, meta_json
+                FROM memory_events
+                WHERE owner = ? AND summarised = 0 AND kind != 'compaction_summary'
+                ORDER BY ts ASC
+                LIMIT ?
+                """,
+                (owner, limit),
+            )
+            return [self._row_to_event(r) for r in cur.fetchall()]
+
+    def mark_summarised(self, *, ids: list[str]) -> None:
+        """Flag events as covered by a compaction summary."""
+        if not ids:
+            return
+        with self._lock:
+            ph = ",".join(["?"] * len(ids))
+            self._conn.execute(
+                f"UPDATE memory_events SET summarised = 1 WHERE id IN ({ph})",
+                ids,
+            )
+            self._conn.commit()
+
+    # -----------------------------------------------------------------
+    # Memory management (for settings/reset)
+    # -----------------------------------------------------------------
+
+    def clear_owner(self, *, owner: str) -> int:
+        """Delete ALL events for an owner. Returns count deleted."""
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT COUNT(*) FROM memory_events WHERE owner = ?", (owner,)
+            )
+            count = cur.fetchone()[0]
+            self._conn.execute(
+                "DELETE FROM memory_events WHERE owner = ?", (owner,)
+            )
+            if self._fts_enabled:
+                self._conn.execute(
+                    "DELETE FROM memory_events_fts WHERE owner = ?", (owner,)
+                )
+            if self._vec_enabled:
+                # vec_memory rows are tied to rowids that are now deleted
+                # Re-create is safest
+                try:
+                    self._conn.execute("DELETE FROM vec_memory")
+                except Exception:
+                    pass
+            self._conn.commit()
+        return count
+
+    def delete_by_meta(
+        self, *, owner: str, source: str, profile_key: str
+    ) -> int:
+        """Delete events matching owner + meta source + profile_key (for onboard upsert)."""
+        with self._lock:
+            # SQLite json_extract for meta_json
+            cur = self._conn.execute(
+                """
+                SELECT id FROM memory_events
+                WHERE owner = ?
+                  AND json_extract(meta_json, '$.source') = ?
+                  AND json_extract(meta_json, '$.profile_key') = ?
+                """,
+                (owner, source, profile_key),
+            )
+            ids = [r[0] for r in cur.fetchall()]
+            if not ids:
+                return 0
+            ph = ",".join(["?"] * len(ids))
+            self._conn.execute(
+                f"DELETE FROM memory_events WHERE id IN ({ph})", ids
+            )
+            if self._fts_enabled:
+                self._conn.execute(
+                    f"DELETE FROM memory_events_fts WHERE id IN ({ph})", ids
+                )
+            self._conn.commit()
+        return len(ids)
+
+    # -----------------------------------------------------------------
+    # Utilities
+    # -----------------------------------------------------------------
+
     def _row_to_event(self, r: Iterable[Any]) -> MemoryEvent:
         id, ts, owner, session_id, kind, content, meta_json = r
         try:
@@ -234,9 +505,16 @@ class MemoryStore:
                 total = cur.fetchone()[0]
                 cur = self._conn.execute("SELECT COUNT(DISTINCT owner) FROM memory_events")
                 owners = cur.fetchone()[0]
-                return {"events": total, "owners": owners}
+                vec_count = 0
+                if self._vec_enabled:
+                    try:
+                        cur = self._conn.execute("SELECT COUNT(*) FROM vec_memory")
+                        vec_count = cur.fetchone()[0]
+                    except Exception:
+                        pass
+                return {"events": total, "owners": owners, "embeddings": vec_count}
             except Exception:
-                return {"events": 0, "owners": 0}
+                return {"events": 0, "owners": 0, "embeddings": 0}
 
 
 _RE_KV = re.compile(

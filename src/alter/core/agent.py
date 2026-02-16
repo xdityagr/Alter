@@ -12,6 +12,9 @@ from datetime import datetime
 from .audit import Auditor
 from .llm.base import Llm
 from .memory import MemoryStore
+from .memory.embeddings import Embedder
+from .memory.state_store import StateStore, extract_state_facts
+from .memory.compaction import CompactionWorker
 from .tools.registry import ToolRegistry
 
 
@@ -24,10 +27,15 @@ Do NOT write any text before or after the JSON.
 Tool Use:
 - To use a tool, return: {"type":"tool", "tool_id":"...", "inputs":{...}, "reason":"..."}
 - To give a final answer, return: {"type":"final", "content":"..."}
+- For web.search/web.surf, if the user asks for latest/recent/new/today, set an explicit time_range (day/week/month/year) and category; do not rely on implicit detection.
+- For web.search/web.surf, rewrite the user's request into a concise search query (3-8 words) and pass that as the tool `query`. Preserve named entities and key terms; do not add facts.
 
 Grounding & Memory:
 - You may see a "Grounded Memory" section in the prompt. Treat it as the ONLY reliable long-term memory.
 - Do NOT invent memories. If you cannot find a needed detail in "Grounded Memory" or recent conversation, say you don't know and use tools to verify.
+- VERIFY BEFORE ASSERTING: Never claim a file exists, a package is installed, or a service is running without first checking with a tool (fs.list, fs.read, shell.run, process.list, env.get).
+- When a tool returns an error, EXPLAIN the error honestly. Never pretend the operation succeeded.
+- If you are uncertain about ANY fact (file path, version, config value, env variable), say "Let me check" and use a tool.
 - Never guess about system state (files, installed apps, current time, network results). If it is not in grounded memory or fresh tool output, run the appropriate tool to check.
 - If the prompt includes a "User Profile" section, treat it as user preferences. Follow it unless it conflicts with these rules.
 
@@ -36,11 +44,22 @@ Rules:
 - REPORT: If a tool just finished execution, report the result to the user. Do NOT simply say "Hello" unless the user greeted you.
 - ACTION: If you have the information, provide the final answer immediately. Do not ask for confirmation if you already have the data.
 - SILENCE: Do NOT return a final response like "I will do that" or "Allocating tool". Just send the tool request.
+- USE SHELL: For git (commit, push, etc.), npm, pip, and other CLI tools not covered by specific tools, use the `shell.run` tool. Do not hallucinate specific tools for every CLI command.
+- TOOL CHAINING: For multi-step tasks, verify each step's output before proceeding to the next. Example: after writing a file, read it back if correctness matters.
+- NEVER fabricate file paths, URLs, package names, or command outputs. If unsure, use a tool to look them up.
+- When the user asks about the current state of ANYTHING (files, processes, time, git, env), ALWAYS use a tool first. Do not guess from stale history.
 
 Style:
 - Default to concise, structured answers (1-3 short sections max).
 - Keep a warm, human tone; mild playful humor is OK when it fits.
 - When debugging, be diagnostic: what you checked + what to do next.
+
+Error Handling:
+- If a tool fails (e.g., "File not found"), READ the error message carefully.
+- Do NOT retry the exact same inputs.
+- Try a correction (e.g., use absolute path, check file existence with `fs.list`, or use `text.search`).
+- After an error, explain: (1) what you tried, (2) what went wrong, (3) what you'll try next or ask for guidance.
+- If TWO different approaches fail for the same goal, stop and ask the user for help rather than guessing further.
 
 Delegation:
 - You have access to specialized Sub-Agents (e.g., Coder Agent via `coder.task`).
@@ -52,11 +71,14 @@ Delegation:
 
 REPAIR_PROMPT = """Your previous output was invalid.
 
-Return ONLY a single JSON object, exactly one of:
-- {"type":"final","content":"..."}
-- {"type":"tool","tool_id":"...","inputs":{...},"reason":"..."}
+Return ONLY a single raw JSON object (NOT wrapped in markdown code blocks), exactly one of:
+- {"type":"final","content":"Your answer text here"}
+- {"type":"tool","tool_id":"the.tool.id","inputs":{"param":"value"},"reason":"why"}
 
-Do not include any other text.
+IMPORTANT:
+- Do NOT wrap in ```json ... ```
+- Do NOT include any text before or after the JSON
+- The output must start with { and end with }
 """
 
 
@@ -81,6 +103,35 @@ def _tool_sig(tr: ToolRequest) -> str:
     return f"{tr.tool_id}:{json.dumps(tr.inputs, sort_keys=True, ensure_ascii=True)}"
 
 
+def _auto_fill_missing_inputs(*, tool: Any, inputs: dict[str, Any], last_user: str) -> dict[str, Any] | None:
+    """
+    Best-effort recovery for malformed tool inputs.
+    Only fills a single missing required string field with the last user message.
+    """
+    if not last_user or not isinstance(inputs, dict):
+        return None
+    try:
+        schema = getattr(tool, "spec", None).inputs_schema if getattr(tool, "spec", None) else {}
+        required = list(schema.get("required") or [])
+        props = schema.get("properties") or {}
+        missing = []
+        for k in required:
+            v = inputs.get(k, None)
+            if v is None or (isinstance(v, str) and not v.strip()):
+                missing.append(k)
+        if len(missing) != 1:
+            return None
+        key = missing[0]
+        prop = props.get(key, {})
+        if prop.get("type") != "string":
+            return None
+        fixed = dict(inputs)
+        fixed[key] = last_user
+        return fixed
+    except Exception:
+        return None
+
+
 def _format_tool_result(tr: ToolRequest, result: Any) -> str:
     # Keep tool output bounded in the prompt to reduce context blow-ups.
     def trim(s: str, n: int = 4000) -> str:
@@ -102,9 +153,17 @@ def _format_tool_result(tr: ToolRequest, result: Any) -> str:
 
 def _is_greeting(text: str) -> bool:
     import re
-    # Simple check for standalone greetings
+    # Match standalone greetings (with optional trailing words like "there", "alter", punctuation)
+    # but NOT greetings followed by actual requests ("hi, can you help me...")
     t = text.strip().lower()
-    return bool(re.match(r"^(hi|hello|hey|yo|greetings|good morning|good evening)$", t, re.IGNORECASE))
+    # Pure greetings or greetings + filler words only
+    if re.match(r"^(hi|hello|hey|yo|greetings|good morning|good evening|good afternoon|sup|what'?s up)\s*[!?.]*$", t, re.IGNORECASE):
+        return True
+    if re.match(r"^(hi|hello|hey|yo)\s+(there|alter|buddy|man|dude|bro)[!?.]*$", t, re.IGNORECASE):
+        return True
+    if re.match(r"^(how are you|how'?s it going|what'?s good)[!?.]*$", t, re.IGNORECASE):
+        return True
+    return False
 
 
 
@@ -197,6 +256,11 @@ def _format_prompt(
     grounded_memory: list[str] | None = None,
     user_profile: list[str] | None = None,
     context_summary: list[str] | None = None,
+    recent_actions: list[str] | None = None,
+    system_state: dict[str, str] | None = None,
+    history_window: int = 24,
+    tool_line_limit: int = 60,
+    tool_char_limit: int = 3000,
 ) -> str:
     lines: list[str] = []
     try:
@@ -229,13 +293,26 @@ def _format_prompt(
         lines.append("Grounded Memory (authoritative excerpts):")
         lines.extend(grounded_memory)
         lines.append("")
+    if recent_actions:
+        lines.append("Recent Actions (what you did recently, across sessions):")
+        lines.extend(recent_actions)
+        lines.append("")
+    if system_state:
+        lines.append("System State (always-on facts — treat as reliable context):")
+        for k, v in system_state.items():
+            lines.append(f"  {k} = {v}")
+        lines.append("")
     lines.append("Conversation:")
-    for m in history[-16:]:
+    for m in history[-max(1, int(history_window)):]:
         role = m.get("role", "unknown")
         content = m.get("content", "")
         if role == "tool":
-            # Compact tool output in prompt; full raw output lives in memory store.
-            content = "\n".join((content or "").splitlines()[:3])
+            # Show enough tool output so the LLM can see the results.
+            # Cap tool output to prevent context blow-up.
+            tool_lines = (content or "").splitlines()[: max(1, int(tool_line_limit))]
+            content = "\n".join(tool_lines)
+            if len(content) > tool_char_limit:
+                content = content[: tool_char_limit] + "\n...(truncated)..."
         lines.append(f"{role.upper()}: {content}")
     lines.append("")
     lines.append("Now produce the next action as JSON.")
@@ -268,7 +345,8 @@ class AgentSession:
         on_token: Callable[[str], None] | None = None,
         on_tool_start: Callable[[ToolRequest], None] | None = None,
         on_tool_progress: Callable[[str], None] | None = None,
-        max_steps: int = 6,
+        on_tool_result: Callable[[ToolRequest, Any], None] | None = None,
+        max_steps: int = 12,
     ) -> AgentResult:
         self._loop_guard = {}
         self._history.append({"role": "user", "content": user_message})
@@ -277,6 +355,8 @@ class AgentSession:
         explicit = self._maybe_run_explicit_tool(
             user_message=user_message,
             on_tool_start=on_tool_start,
+            on_tool_progress=on_tool_progress,
+            on_tool_result=on_tool_result,
         )
         if explicit is not None:
             if isinstance(explicit, FinalResponse):
@@ -291,7 +371,7 @@ class AgentSession:
             self._user_turns += 1
             self._agent._maybe_update_summary(owner=self._owner, session_id=self._session_id, user_turns=self._user_turns)
             return FinalResponse(content=msg)
-        out = self._continue(max_steps=max_steps, on_token=on_token, on_tool_start=on_tool_start, on_tool_progress=on_tool_progress)
+        out = self._continue(max_steps=max_steps, on_token=on_token, on_tool_start=on_tool_start, on_tool_progress=on_tool_progress, on_tool_result=on_tool_result)
         if isinstance(out, FinalResponse):
             self._user_turns += 1
             self._agent._maybe_update_summary(owner=self._owner, session_id=self._session_id, user_turns=self._user_turns)
@@ -305,6 +385,7 @@ class AgentSession:
         on_token: Callable[[str], None] | None = None,
         on_tool_start: Callable[[ToolRequest], None] | None = None,
         on_tool_progress: Callable[[str], None] | None = None,
+        on_tool_result: Callable[[ToolRequest, Any], None] | None = None,
         max_steps: int = 6,
     ) -> AgentResult:
         tr = self._pending.get(request_id)
@@ -331,8 +412,16 @@ class AgentSession:
             session_id=self._session_id,
             content=tool_out,
             meta={"tool_id": tr.tool_id, "request_id": tr.request_id, "status": getattr(result, "status", "")},
+            tool_id=tr.tool_id,
+            tool_inputs=tr.inputs,
+            tool_stdout=getattr(result, "stdout", "") or "",
+            tool_stderr=getattr(result, "stderr", "") or "",
+            tool_status=getattr(result, "status", "") or "",
         )
-        return self._continue(max_steps=max_steps, on_token=on_token, on_tool_start=on_tool_start, on_tool_progress=on_tool_progress)
+        if on_tool_result:
+            on_tool_result(tr, result)
+        
+        return self._continue(max_steps=max_steps, on_token=on_token, on_tool_start=on_tool_start, on_tool_progress=on_tool_progress, on_tool_result=on_tool_result)
 
     def _continue(
         self,
@@ -341,6 +430,7 @@ class AgentSession:
         on_token: Callable[[str], None] | None = None,
         on_tool_start: Callable[[ToolRequest], None] | None = None,
         on_tool_progress: Callable[[str], None] | None = None,
+        on_tool_result: Callable[[ToolRequest, Any], None] | None = None,
     ) -> AgentResult:
         steps = 0
         while steps < max_steps:
@@ -353,7 +443,7 @@ class AgentSession:
 
             sig = _tool_sig(action)
             self._loop_guard[sig] = self._loop_guard.get(sig, 0) + 1
-            if self._loop_guard[sig] >= 2:
+            if self._loop_guard[sig] >= 3:
                 # Instead of giving up, tell the agent to stop loops.
                 msg = (
                     "SYSTEM ERROR: You are retrying the same tool call repeatedly with identical inputs. "
@@ -373,6 +463,10 @@ class AgentSession:
                 on_tool_start(action)
 
             result = self._agent.execute_tool(tool_request=action, on_progress=on_tool_progress)
+            
+            if on_tool_result:
+                on_tool_result(action, result)
+
             tool_out = _format_tool_result(action, result)
             self._last_tool_output = tool_out
             self._history.append({"role": "tool", "content": tool_out})
@@ -382,6 +476,11 @@ class AgentSession:
                 session_id=self._session_id,
                 content=tool_out,
                 meta={"tool_id": action.tool_id, "request_id": action.request_id, "status": getattr(result, "status", "")},
+                tool_id=action.tool_id,
+                tool_inputs=action.inputs,
+                tool_stdout=getattr(result, "stdout", "") or "",
+                tool_stderr=getattr(result, "stderr", "") or "",
+                tool_status=getattr(result, "status", "") or "",
             )
 
         return FinalResponse(content="Reached max tool steps without a final answer.")
@@ -391,6 +490,8 @@ class AgentSession:
         *,
         user_message: str,
         on_tool_start: Callable[[ToolRequest], None] | None,
+        on_tool_progress: Callable[[str], None] | None = None,
+        on_tool_result: Callable[[ToolRequest, Any], None] | None = None,
     ) -> AgentResult | None:
         import re
 
@@ -412,11 +513,23 @@ class AgentSession:
             toks = arg.split()
             rendered = False
             max_pages: int | None = None
+            mode_override: str | None = None
+            category: str | None = None
+            time_range: str | None = None
+            prefer_recent = False
             i = 0
             while i < len(toks):
                 t = toks[i]
                 if t in {"--rendered", "-r"} and tool_id == "web.surf":
                     rendered = True
+                    i += 1
+                    continue
+                if t in {"--fast", "-f"} and tool_id == "web.surf":
+                    mode_override = "fast"
+                    i += 1
+                    continue
+                if t in {"--deep", "-d"} and tool_id == "web.surf":
+                    mode_override = "deep"
                     i += 1
                     continue
                 if t in {"--pages", "--max-pages"} and tool_id == "web.surf":
@@ -427,16 +540,43 @@ class AgentSession:
                             continue
                         except Exception:
                             pass
+                if t in {"--category", "--cat"}:
+                    if i + 1 < len(toks):
+                        category = toks[i + 1]
+                        i += 2
+                        continue
+                if t in {"--time-range", "--time"}:
+                    if i + 1 < len(toks):
+                        time_range = toks[i + 1]
+                        i += 2
+                        continue
+                if t in {"--prefer-recent"}:
+                    prefer_recent = True
+                    i += 1
+                    continue
                 break
             query = " ".join(toks[i:]).strip()
             if not query:
                 return FinalResponse(content=f"Usage: `@{tool_id} <query>`")
             inputs = {"query": query}
             if tool_id == "web.surf":
+                if mode_override:
+                    inputs["mode"] = mode_override
                 if rendered:
                     inputs["rendered"] = True
                 if max_pages is not None:
                     inputs["max_pages"] = max_pages
+                if category:
+                    inputs["category"] = category
+                if time_range:
+                    inputs["time_range"] = time_range
+                if prefer_recent:
+                    inputs["prefer_recent"] = True
+            if tool_id == "web.search":
+                if category:
+                    inputs["category"] = category
+                if time_range:
+                    inputs["time_range"] = time_range
         elif tool_id in {"web.visit", "web.visit_rendered"}:
             if not arg:
                 return FinalResponse(content=f"Usage: `@{tool_id} <url>`")
@@ -460,6 +600,7 @@ class AgentSession:
         try:
             self._agent._tools.validate_inputs(tool_id, inputs)
         except Exception as e:
+            # For explicit tools, we just return the error to the user immediately.
             return FinalResponse(content=f"Invalid inputs for `{tool_id}`: {e}")
 
         request_id = uuid.uuid4().hex
@@ -478,7 +619,7 @@ class AgentSession:
         if on_tool_start:
             on_tool_start(tr)
 
-        result = self._agent.execute_tool(tool_request=tr)
+        result = self._agent.execute_tool(tool_request=tr, on_progress=on_tool_progress)
         tool_out = _format_tool_result(tr, result)
         self._last_tool_output = tool_out
         self._history.append({"role": "tool", "content": tool_out})
@@ -488,7 +629,15 @@ class AgentSession:
             session_id=self._session_id,
             content=tool_out,
             meta={"tool_id": tr.tool_id, "request_id": tr.request_id, "status": getattr(result, "status", "")},
+            tool_id=tr.tool_id,
+            tool_inputs=tr.inputs,
+            tool_stdout=getattr(result, "stdout", "") or "",
+            tool_stderr=getattr(result, "stderr", "") or "",
+            tool_status=getattr(result, "status", "") or "",
         )
+
+        if on_tool_result:
+            on_tool_result(tr, result)
 
         # For explicit tools, return tool output directly (predictable UX).
         stdout = getattr(result, "stdout", "") or ""
@@ -520,6 +669,10 @@ class Agent:
         memory_summary_every_n_user_turns: int = 12,
         memory_summary_max_source_events: int = 80,
         memory_summary_max_chars_per_source: int = 700,
+        memory_semantic_search: bool = True,
+        state_store: StateStore | None = None,
+        compaction_interval_minutes: int = 30,
+        compaction_prune_days: int = 30,
         system_prompt: str | None = None,
     ):
         self._llm = llm
@@ -545,6 +698,38 @@ class Agent:
         self._memory_summary_max_chars_per_source = max(200, int(memory_summary_max_chars_per_source))
         self._system_prompt = system_prompt or SYSTEM_PROMPT
 
+        # --- Semantic search & state store ---
+        self._embedder: Embedder | None = None
+        if memory_semantic_search and memory_enabled:
+            try:
+                self._embedder = Embedder()
+            except Exception:
+                self._embedder = None
+
+        self._state_store = state_store
+
+        # --- Compaction worker ---
+        self._compaction_worker: CompactionWorker | None = None
+        if (
+            memory_enabled
+            and self._memory
+            and self._state_store
+            and self._embedder
+        ):
+            try:
+                self._compaction_worker = CompactionWorker(
+                    store=self._memory,
+                    state_store=self._state_store,
+                    llm=self._llm,
+                    embedder=self._embedder,
+                    owner=memory_owner,
+                    interval_minutes=compaction_interval_minutes,
+                    prune_days=compaction_prune_days,
+                )
+                self._compaction_worker.start()
+            except Exception:
+                self._compaction_worker = None
+
     def new_session(self, *, owner: str | None = None) -> AgentSession:
         o = owner or self._default_memory_owner
         return AgentSession(agent=self, owner=o)
@@ -555,13 +740,35 @@ class Agent:
             return "local"
         return "user:" + sha256(secret.encode("utf-8")).hexdigest()[:12]
 
-    def _mem_write(self, *, owner: str, kind: str, session_id: str, content: str, meta: dict[str, Any]) -> None:
+    def _mem_write(
+        self,
+        *,
+        owner: str,
+        kind: str,
+        session_id: str,
+        content: str,
+        meta: dict[str, Any],
+        tool_id: str = "",
+        tool_inputs: dict[str, Any] | None = None,
+        tool_stdout: str = "",
+        tool_stderr: str = "",
+        tool_status: str = "",
+    ) -> None:
         if not self._memory_enabled or not self._memory:
             return
         if kind == "tool" and not self._memory_store_tool_outputs:
             return
         if kind == "assistant" and not self._memory_store_assistant_outputs:
             return
+
+        # Generate embedding if semantic search is enabled
+        embedding: bytes | None = None
+        if self._embedder and content:
+            try:
+                embedding = self._embedder.encode(content[:500])
+            except Exception:
+                pass
+
         try:
             self._memory.add_event(
                 owner=owner,
@@ -569,10 +776,28 @@ class Agent:
                 kind=kind,
                 content=content,
                 meta=meta,
+                embedding=embedding,
             )
         except Exception:
             # Memory should never break the agent loop.
             return
+
+        # Extract state facts from tool results
+        if kind == "tool" and self._state_store and tool_id:
+            try:
+                facts = extract_state_facts(
+                    tool_id=tool_id,
+                    inputs=tool_inputs or {},
+                    stdout=tool_stdout,
+                    stderr=tool_stderr,
+                    status=tool_status,
+                )
+                for key, value, source in facts:
+                    self._state_store.set(
+                        owner=owner, key=key, value=value, source=source
+                    )
+            except Exception:
+                pass
 
     def tool_specs_for_prompt(self) -> str:
         specs = self._tools.list_specs()
@@ -603,6 +828,12 @@ class Agent:
         grounded: list[str] = []
         profile_lines: list[str] = []
         summary_lines: list[str] = []
+        # Track last user message for tool input recovery.
+        last_user = ""
+        for m in reversed(history):
+            if m.get("role") == "user":
+                last_user = str(m.get("content", "")).strip()
+                break
         if self._memory_enabled and self._memory and history:
             # Derived profile is stable per-owner and should not depend on the query.
             try:
@@ -635,19 +866,24 @@ class Agent:
                     summary_lines = []
 
             # Use the last user message as retrieval query.
-            last_user = ""
-            for m in reversed(history):
-                if m.get("role") == "user":
-                    last_user = str(m.get("content", "")).strip()
-                    break
             if last_user:
                 try:
-                    items = self._memory.search(
-                        owner=owner,
-                        query=last_user,
-                        limit=self._memory_max_relevant,
-                        kinds=self._memory_retrieve_kinds,
-                    )
+                    # Use hybrid search (FTS + semantic) when embedder is available
+                    if self._embedder:
+                        items = self._memory.hybrid_search(
+                            owner=owner,
+                            query=last_user,
+                            embedder=self._embedder,
+                            limit=self._memory_max_relevant,
+                            kinds=self._memory_retrieve_kinds,
+                        )
+                    else:
+                        items = self._memory.search(
+                            owner=owner,
+                            query=last_user,
+                            limit=self._memory_max_relevant,
+                            kinds=self._memory_retrieve_kinds,
+                        )
                     for ev in items:
                         txt = (ev.content or "").strip()
                         if len(txt) > self._memory_max_chars_per_item:
@@ -656,13 +892,74 @@ class Agent:
                 except Exception:
                     grounded = []
 
-        prompt = _format_prompt(
-            self.tool_specs_for_prompt(),
-            history,
+            # Fetch recent tool actions (across sessions) for continuity.
+            recent_action_lines: list[str] = []
+            try:
+                recent_tool_evs = self._memory.recent(owner=owner, limit=5, kinds=["tool"])
+                for ev in reversed(recent_tool_evs):  # oldest first
+                    # Extract tool_id from meta or content
+                    tool_id = ev.meta.get("tool_id", "unknown")
+                    status = ev.meta.get("status", "")
+                    # Show a compact summary of the action
+                    first_line = (ev.content or "").split("\n")[0]
+                    recent_action_lines.append(f"- [{ev.ts}] {tool_id} ({status}): {first_line}")
+            except Exception:
+                recent_action_lines = []
+
+        # Gather system state facts
+        state_facts: dict[str, str] = {}
+        if self._state_store:
+            try:
+                state_facts = self._state_store.get_all(owner=owner)
+            except Exception:
+                state_facts = {}
+
+        def build_prompt(
+            *,
             grounded_memory=grounded or None,
-            user_profile=profile_lines or None,
-            context_summary=summary_lines or None,
-        )
+            recent_actions=recent_action_lines or None,
+            system_state=state_facts or None,
+            history_window=24,
+            tool_line_limit=60,
+            tool_char_limit=3000,
+        ) -> str:
+            return _format_prompt(
+                self.tool_specs_for_prompt(),
+                history,
+                grounded_memory=grounded_memory,
+                user_profile=profile_lines or None,
+                context_summary=summary_lines or None,
+                recent_actions=recent_actions,
+                system_state=system_state,
+                history_window=history_window,
+                tool_line_limit=tool_line_limit,
+                tool_char_limit=tool_char_limit,
+            )
+
+        prompt = build_prompt()
+
+        # Guardrail against provider input-size limits (e.g., 8k tokens).
+        max_prompt_chars = 24000
+        if len(prompt) > max_prompt_chars:
+            prompt = build_prompt(
+                history_window=16,
+                tool_line_limit=30,
+                tool_char_limit=1500,
+            )
+        if len(prompt) > max_prompt_chars:
+            prompt = build_prompt(
+                grounded_memory=None,
+                recent_actions=None,
+                system_state=None,
+                history_window=12,
+                tool_line_limit=20,
+                tool_char_limit=1000,
+            )
+        if len(prompt) > max_prompt_chars:
+            # Final fallback: keep the start and the most recent tail.
+            head = prompt[:12000]
+            tail = prompt[-(max_prompt_chars - 12000) :]
+            prompt = head + "\n...(trimmed)...\n" + tail
         
         # Inject thinking instruction
         if self._thinking_mode == "auto":
@@ -731,7 +1028,45 @@ class Agent:
             try:
                 self._tools.validate_inputs(tool_id, inputs)
             except Exception as e:
-                return FinalResponse(content=f"Tool inputs were invalid: {e}")
+                # Attempt generic recovery for any tool: fill one missing required string.
+                recovered = False
+                fixed_inputs = _auto_fill_missing_inputs(tool=tool, inputs=inputs, last_user=last_user)
+                if fixed_inputs is not None:
+                    try:
+                        self._tools.validate_inputs(tool_id, fixed_inputs)
+                        inputs = fixed_inputs
+                        recovered = True
+                    except Exception:
+                        recovered = False
+
+                if not recovered:
+                    # One repair attempt: ask the model to return a corrected tool call.
+                    try:
+                        raw2 = self._llm.generate(
+                            system_prompt=self._system_prompt,
+                            user_prompt=(
+                                f"{REPAIR_PROMPT}\n\n"
+                                f"Tool inputs were invalid for {tool_id}: {e}\n"
+                                f"Return a corrected tool request.\n\n"
+                                f"User message: {last_user}\n\n"
+                                f"Previous tool request: {obj}"
+                            ),
+                        )
+                        self._auditor.log_event({"type": "llm_output", "kind": "repair", "text": _trim_for_log(raw2)})
+                        obj2 = _parse_first_json_object(raw2)
+                        if isinstance(obj2, dict) and obj2.get("type") in {"tool", tool_id}:
+                            if obj2.get("type") == "tool":
+                                tool_id = str(obj2.get("tool_id", tool_id)).strip() or tool_id
+                                inputs = obj2.get("inputs") or {}
+                            else:
+                                inputs = obj2.get("inputs") or {}
+                            self._tools.validate_inputs(tool_id, inputs)
+                            recovered = True
+                    except Exception:
+                        recovered = False
+
+                if not recovered:
+                    return FinalResponse(content=f"Tool inputs were invalid: {e}")
 
             request_id = uuid.uuid4().hex
             self._auditor.log_event(

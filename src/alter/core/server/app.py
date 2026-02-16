@@ -14,6 +14,7 @@ from ..agent import AgentSession, FinalResponse, ToolRequest
 from ..audit import Auditor
 from ..llm.factory import build_llm
 from ..memory import MemoryStore
+from ..memory.state_store import StateStore
 from ..tools.defaults import build_default_registry
 from .auth import is_valid_api_key, require_api_key
 from .models import (
@@ -55,14 +56,80 @@ def create_app(cfg: AlterConfig | None = None) -> FastAPI:
                  print(f" • Status: Error ({e})")
         else:
             print(f" • Status: \033[31mDisabled\033[0m (Enable in config)")
+        
+        # Auto-launch Docker + SearXNG (non-blocking background thread)
+        import subprocess, threading, time, shutil, sys, os
+        def _ensure_docker_and_searxng():
+            try:
+                # 1. Check if Docker daemon is already running
+                r = subprocess.run(
+                    ["docker", "info"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                    timeout=5,
+                )
+                docker_ready = r.returncode == 0
+
+                # 2. If not running, try to start Docker Desktop (Windows)
+                if not docker_ready and sys.platform == "win32":
+                    # Common Docker Desktop paths
+                    dd_paths = [
+                        Path(os.environ.get("ProgramFiles", "")) / "Docker" / "Docker" / "Docker Desktop.exe",
+                        Path(os.environ.get("LOCALAPPDATA", "")) / "Docker" / "Docker Desktop.exe",
+                    ]
+                    dd_exe = None
+                    for p in dd_paths:
+                        if p.exists():
+                            dd_exe = str(p)
+                            break
+                    if not dd_exe:
+                        dd_exe = shutil.which("Docker Desktop")
+
+                    if dd_exe:
+                        print(" • Docker: \033[33mStarting Docker Desktop...\033[0m")
+                        subprocess.Popen(
+                            [dd_exe],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                        )
+                        # Wait for Docker daemon to become ready (up to 45s)
+                        for _ in range(23):
+                            time.sleep(2)
+                            chk = subprocess.run(
+                                ["docker", "info"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                creationflags=subprocess.CREATE_NO_WINDOW,
+                                timeout=5,
+                            )
+                            if chk.returncode == 0:
+                                docker_ready = True
+                                break
+                    if not docker_ready:
+                        return  # Docker not available, give up silently
+
+                # 3. Start the SearXNG container
+                subprocess.run(
+                    ["docker", "start", "searxng"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                    timeout=10,
+                )
+                print(" • Service: \033[32mSearXNG (Auto-started)\033[0m")
+            except Exception:
+                pass  # Silently fail — search will use DuckDuckGo fallback
+
+        threading.Thread(target=_ensure_docker_and_searxng, daemon=True).start()
+
         print("============================\n")
 
     llm = build_llm(cfg)
     auditor = Auditor(path=Path("data") / "audit.jsonl")
     tools = build_default_registry(cfg, llm, auditor)
     memory_store = None
+    state_store = None
     if getattr(cfg, "memory", None) and cfg.memory.enabled:
         memory_store = MemoryStore(path=Path(cfg.memory.path), redact_secrets=getattr(cfg.memory, "redact_secrets", True))
+        state_store = StateStore(path=Path(getattr(cfg.memory, "state_store_path", "data/state.sqlite3")))
     agent = AlterAgent(
         llm=llm,
         tools=tools,
@@ -79,6 +146,10 @@ def create_app(cfg: AlterConfig | None = None) -> FastAPI:
         memory_summary_every_n_user_turns=getattr(cfg.memory, "summary_every_n_user_turns", 12),
         memory_summary_max_source_events=getattr(cfg.memory, "summary_max_source_events", 80),
         memory_summary_max_chars_per_source=getattr(cfg.memory, "summary_max_chars_per_source", 700),
+        memory_semantic_search=getattr(cfg.memory, "semantic_search", True),
+        state_store=state_store,
+        compaction_interval_minutes=getattr(cfg.memory, "compaction_interval_minutes", 30),
+        compaction_prune_days=getattr(cfg.memory, "compaction_prune_days", 30),
     )
 
 
@@ -235,14 +306,19 @@ def create_app(cfg: AlterConfig | None = None) -> FastAPI:
             if "titles" not in content or not isinstance(content["titles"], list): content["titles"] = ["LOCAL INTELLIGENCE"]
             if "prompts" not in content or not isinstance(content["prompts"], list):
                 content["prompts"] = ["Check system status", "Search the web for news", "Summarize recent logs", "Configure models"]
-                
+            
+            if cfg.ui.skip_setup:
+                content["has_identity"] = True
+            else:
+                content["has_identity"] = bool(profile_items)
             return content
             
         except Exception as e:
             print(f"Error generating welcome: {e}")
             return {
                 "titles": ["LOCAL INTELLIGENCE"],
-                "prompts": ["Check system status", "Search the web for news", "Summarize recent logs", "Configure models"]
+                "prompts": ["Check system status", "Search the web for news", "Summarize recent logs", "Configure models"],
+                "has_identity": bool(profile_items) if 'profile_items' in dir() else False
             }
 
     @app.post("/v1/system/snapshot", response_model=MemoryRememberResponse)
@@ -299,15 +375,45 @@ def create_app(cfg: AlterConfig | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="Memory is disabled")
         candidate = request.headers.get("x-alter-key") or request.query_params.get("key")
         owner = AlterAgent.owner_from_secret(candidate)
+
+        # Onboard upsert: delete existing entry with same profile_key before inserting
+        meta = req.meta or {"source": "remember"}
+        if meta.get("source") == "onboard" and meta.get("profile_key"):
+            try:
+                memory_store.delete_by_meta(
+                    owner=owner,
+                    source="onboard",
+                    profile_key=meta["profile_key"],
+                )
+            except Exception:
+                pass  # best-effort
+
         ev = memory_store.add_event(
             owner=owner,
             session_id=None,
             kind="note",
             content=req.content,
-            meta=req.meta or {"source": "remember"},
+            meta=meta,
         )
         auditor.log_event({"type": "memory_remembered", "owner": owner, "mem_id": ev.id, "kind": ev.kind})
         return MemoryRememberResponse(mem_id=ev.id, ts=ev.ts)
+
+    @app.delete("/v1/memory/reset")
+    async def reset_memory(request: Request, _: Any = auth, __: Any = rate):
+        """Delete ALL memory events for the authenticated owner."""
+        if not memory_store:
+            raise HTTPException(status_code=400, detail="Memory is disabled")
+        candidate = request.headers.get("x-alter-key") or request.query_params.get("key")
+        owner = AlterAgent.owner_from_secret(candidate)
+        deleted = memory_store.clear_owner(owner=owner)
+        # Also clear state store facts
+        if state_store:
+            try:
+                state_store.clear(owner=owner)
+            except Exception:
+                pass
+        auditor.log_event({"type": "memory_reset", "owner": owner, "deleted": deleted})
+        return {"ok": True, "deleted": deleted}
 
     @app.post("/v1/memory/summarize", response_model=MemorySummarizeResponse)
     async def memory_summarize(request: Request, _: Any = auth, __: Any = rate):
@@ -483,6 +589,25 @@ def create_app(cfg: AlterConfig | None = None) -> FastAPI:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    @app.post("/v1/system/auto_confirm")
+    async def set_auto_confirm(request: Request, _: Any = auth, __: Any = rate):
+        """Toggle auto-confirm for all tools at runtime."""
+        body = await request.json()
+        enabled = bool(body.get("enabled", False))
+
+        # Update in-memory config
+        cfg.security.auto_confirm_tools = enabled
+
+        # Rebuild tool registry so tool.spec.confirm reflects the new value
+        nonlocal tools
+        new_tools = build_default_registry(cfg, agent._llm, auditor)
+        tools = new_tools
+        agent._tools = new_tools
+
+        state = "ON (tools will auto-execute)" if enabled else "OFF (tools require confirmation)"
+        print(f"[Alter] Auto-confirm: {state}")
+        return {"ok": True, "auto_confirm_tools": enabled}
+
     @app.post("/v1/chat", response_model=ChatResponse)
     async def chat(req: ChatRequest, request: Request, _: Any = auth, __: Any = rate):
         candidate = request.headers.get("x-alter-key") or request.query_params.get("key")
@@ -641,6 +766,44 @@ def create_app(cfg: AlterConfig | None = None) -> FastAPI:
             })
             asyncio.run_coroutine_threadsafe(coro, loop)
 
+        def on_tool_result_sync(tr: ToolRequest, result: Any):
+            # result is ToolResult object (status, stdout, stderr, etc.)
+            command_display = ""
+            if tr.tool_id == "shell.run":
+                prog = str(tr.inputs.get("program", ""))
+                args = tr.inputs.get("args", [])
+                if isinstance(args, list):
+                    command_display = f"{prog} {' '.join(str(a) for a in args)}"
+                else:
+                    command_display = f"{prog}"
+
+            # Build a displayable result string for non-shell tools
+            result_text = ""
+            raw_stdout = getattr(result, "stdout", "") or ""
+            raw_stderr = getattr(result, "stderr", "") or ""
+            artifacts = getattr(result, "artifacts", None)
+            if raw_stdout.strip():
+                result_text = raw_stdout
+            elif artifacts:
+                try:
+                    result_text = json.dumps(artifacts, indent=2, default=str)
+                except Exception:
+                    result_text = str(artifacts)
+
+            coro = ws.send_json({
+                "type": "tool_result",
+                "request_id": tr.request_id,
+                "tool_id": tr.tool_id,
+                "status": getattr(result, "status", "unknown"),
+                "stdout": raw_stdout,
+                "stderr": raw_stderr,
+                "command": command_display,
+                "result": result_text,
+                "inputs": tr.inputs,
+                "artifacts": artifacts,
+            })
+            asyncio.run_coroutine_threadsafe(coro, loop)
+
         try:
             while True:
                 msg = await ws.receive_text()
@@ -666,7 +829,8 @@ def create_app(cfg: AlterConfig | None = None) -> FastAPI:
                             user_message=user_message, 
                             on_token=on_token_sync,
                             on_tool_start=on_tool_start_sync,
-                            on_tool_progress=on_tool_progress_sync
+                            on_tool_progress=on_tool_progress_sync,
+                            on_tool_result=on_tool_result_sync
                         )
                         result = await loop.run_in_executor(None, func)
                     except Exception as e:
@@ -696,9 +860,6 @@ def create_app(cfg: AlterConfig | None = None) -> FastAPI:
                 if mtype == "confirm":
                     request_id = str(data.get("request_id", "")).strip()
                     allow = bool(data.get("allow", False))
-                    # Note: We don't send tool_executing here anymore because session.confirm call will trigger on_tool_start if allow=True
-                    # But wait, confirm() only calls execute_tool if allowed.
-                    # Yes, my change to agent.py calls on_tool_start inside confirm() too.
                     
                     try:
                         func = partial(
@@ -707,7 +868,8 @@ def create_app(cfg: AlterConfig | None = None) -> FastAPI:
                             allow=allow, 
                             on_token=on_token_sync,
                             on_tool_start=on_tool_start_sync,
-                            on_tool_progress=on_tool_progress_sync
+                            on_tool_progress=on_tool_progress_sync,
+                            on_tool_result=on_tool_result_sync
                         )
                         out = await loop.run_in_executor(None, func)
                     except Exception as e:

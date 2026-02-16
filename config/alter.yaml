@@ -2,12 +2,14 @@ index:
   roots: []
 llm:
   backend: ollama
-  model: qwen3-coder:480b-cloud
+  model: qwen3-coder-next:cloud
   ollama_autostart: true
   ollama_base_url: http://127.0.0.1:11434
   thinking_mode: medium
   timeout_s: 120
 memory:
+  compaction_interval_minutes: 30
+  compaction_prune_days: 30
   enabled: true
   max_chars_per_item: 800
   max_relevant: 8
@@ -17,6 +19,8 @@ memory:
   - user
   - tool
   - note
+  semantic_search: true
+  state_store_path: data/state.sqlite3
   store_assistant_outputs: false
   store_tool_outputs: true
   summary_enabled: true
@@ -39,6 +43,7 @@ security:
   - whoami
   - curl
   - code
+  - conda
   allowed_write_roots:
   - .
   api_key: adityaissexy
@@ -52,6 +57,7 @@ security:
 ui:
   host: 127.0.0.1
   port: 8080
+  skip_setup: false
 web:
   rendered_headless: true
   rendered_prefer_chrome_channel: true

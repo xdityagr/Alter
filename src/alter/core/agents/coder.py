@@ -6,8 +6,7 @@ from ...config import AlterConfig
 from ..agent import Agent
 from ..audit import Auditor
 from ..llm.base import Llm
-from ..tools.fs import make_fs_list_tool, make_fs_read_tool
-from ..tools.write import make_fs_write_tool
+from ..tools.fs import make_fs_list_tool, make_fs_read_tool, make_fs_write_tool, make_fs_edit_tool
 from ..tools.git import make_git_diff_tool, make_git_status_tool
 from ..tools.registry import ToolRegistry
 from ..tools.rename import make_fs_rename_tool
@@ -24,11 +23,15 @@ ROLE & CONTEXT:
 - Your output {"type": "final", "content": "..."} is returned to the Main Agent as the result of the tool call.
 
 GUIDELINES:
-1. EXPLORE FIRST: explicitly list files or read content before editing. Do not guess paths.
+1. EXPLORE EFFICIENTLY:
+   - Read `README.md`, `pyproject.toml`, or other high-level config files FIRST to understand the project.
+   - Do NOT list every subdirectory unless necessary. Use `text.search` or `grep` to find relevant code.
+   - If you need to see a file tree, consider `system.snapshot` or list only top-level dirs.
 2. VERIFY: After writing a file, optionally read it back or run a syntax check if simple.
 3. INCREMENTAL: If a task is huge, break it down.
 4. ERROR RECOVERY: If a tool fails (e.g. file not found), attempt to fix the path or create the file. Do not immediately fail.
-5. NO CHATTER: Do not include "I will now do X" in the final response unless it's the summary of work done. The final response should be a clean summary of changes.
+5. USE SHELL: For git, npm, pip, and other CLI tools, use the `shell.run` tool. Do not hallucinate specific tools for every CLI command.
+6. NO CHATTER: Do not include "I will now do X" in the final response unless it's the summary of work done. The final response should be a clean summary of changes.
 
 Response Format:
 Standard JSON tool usage as defined in the main system prompt.
@@ -53,6 +56,7 @@ def build_coder_tools(cfg: AlterConfig) -> ToolRegistry:
     # we can set require_confirmation=False for the sub-agent's tools to allow autonomy.
     # PROCEED WITH CAUTION: This makes the Coder Agent powerful.
     reg.register(make_fs_write_tool(allowed_roots=allowed, require_confirmation=False))
+    reg.register(make_fs_edit_tool(allowed_roots=allowed, require_confirmation=False))
     reg.register(make_fs_rename_tool(allowed_roots=allowed, require_confirmation=False))
     
     # Search

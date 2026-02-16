@@ -30,6 +30,7 @@ class LlmConfig(BaseModel):
 class UiConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8080
+    skip_setup: bool = False
 
 
 class WebConfig(BaseModel):
@@ -54,6 +55,11 @@ class SecurityConfig(BaseModel):
     allowed_commands: list[str] = Field(default_factory=lambda: ["python", "git", "pwsh"])
     # If true, shell commands will not require explicit confirmation (use with caution).
     auto_confirm_shell: bool = False
+    # If true, ALL tools (fs.write, fs.edit, fs.rename, launcher.open, etc.) skip confirmation.
+    # Overrides require_confirmation for tool-level confirmation prompts.
+    auto_confirm_tools: bool = False
+    # Maximum tool steps per agent turn. Higher = more autonomous multi-step tasks.
+    max_tool_steps: int = 12
     # For fs.write tool (confirmation-gated): restrict writes to these roots.
     # Default is current working directory.
     allowed_write_roots: list[str] = Field(default_factory=lambda: ["."])
@@ -89,6 +95,13 @@ class MemoryConfig(BaseModel):
     summary_every_n_user_turns: int = 12
     summary_max_source_events: int = 80
     summary_max_chars_per_source: int = 700
+    # Semantic (vector) search via sqlite-vec.
+    semantic_search: bool = True
+    # Persistent state store for always-on facts.
+    state_store_path: str = "data/state.sqlite3"
+    # Background compaction worker settings.
+    compaction_interval_minutes: int = 30
+    compaction_prune_days: int = 30
 
 
 class IndexConfig(BaseModel):

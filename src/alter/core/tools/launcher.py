@@ -2,11 +2,63 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import subprocess
 from dataclasses import dataclass
 from typing import Any
 
 from .base import Tool, ToolResult, ToolSpec
+
+
+def _looks_like_path_or_url(target: str) -> bool:
+    t = (target or "").strip()
+    if not t:
+        return False
+    tl = t.lower()
+    if "://" in t or tl.startswith("www.") or tl.startswith("mailto:"):
+        return True
+    if os.path.isabs(t):
+        return True
+    # Drive-letter paths like C:\ or C:/
+    if len(t) >= 2 and t[1] == ":":
+        return True
+    # Any path separators likely indicate a path/relative path
+    if "\\" in t or "/" in t:
+        return True
+    return False
+
+
+def _normalize_target(target: str) -> str:
+    t = str(target or "").strip()
+    if not t:
+        return t
+    if _looks_like_path_or_url(t):
+        return t
+    # Strip surrounding quotes
+    if len(t) >= 2 and t[0] == t[-1] and t[0] in {"'", '"'}:
+        t = t[1:-1].strip()
+    t = " ".join(t.split())
+    original = t
+    # Remove polite/verb prefixes iteratively
+    for _ in range(2):
+        t2 = re.sub(r"^(?:please|pls|plz)[,\s]+", "", t, flags=re.IGNORECASE)
+        t2 = re.sub(r"^(?:can|could|would)\s+(?:you|u)[,\s]+", "", t2, flags=re.IGNORECASE)
+        t2 = re.sub(
+            r"^(?:open|launch|start|run|open up|bring up|show|show me|fire up)\s+",
+            "",
+            t2,
+            flags=re.IGNORECASE,
+        )
+        t2 = re.sub(r"^the\s+", "", t2, flags=re.IGNORECASE)
+        t2 = t2.strip()
+        if t2 == t:
+            break
+        t = t2
+    # Remove trailing fluff
+    t = re.sub(r"[,\s]*(?:please|thanks|thank you)$", "", t, flags=re.IGNORECASE).strip()
+    t = re.sub(r"\b(?:app|application)$", "", t, flags=re.IGNORECASE).strip()
+    t = re.sub(r"\bfor me$", "", t, flags=re.IGNORECASE).strip()
+    return t or original
 
 
 def make_launcher_tool(require_confirmation: bool = True) -> Tool:
@@ -32,7 +84,7 @@ def make_launcher_tool(require_confirmation: bool = True) -> Tool:
     )
 
     def action(inputs: dict[str, Any]) -> ToolResult:
-        target = inputs["target"]
+        target = _normalize_target(inputs["target"])
         system = platform.system()
 
         try:

@@ -103,12 +103,102 @@ def _tool_sig(tr: ToolRequest) -> str:
     return f"{tr.tool_id}:{json.dumps(tr.inputs, sort_keys=True, ensure_ascii=True)}"
 
 
-def _auto_fill_missing_inputs(*, tool: Any, inputs: dict[str, Any], last_user: str) -> dict[str, Any] | None:
+def _looks_like_url(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+    tl = t.lower()
+    return "://" in t or tl.startswith("www.") or tl.startswith("mailto:")
+
+
+def _looks_like_windows_abs_path(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+    # Drive-letter paths: C:\... or C:/...
+    return len(t) >= 3 and t[1] == ":" and t[2] in {"\\", "/"}
+
+
+def _looks_like_filename(text: str) -> bool:
+    import re
+
+    t = (text or "").strip().strip('"').strip("'")
+    if not t or len(t) > 260:
+        return False
+    if any(ch in t for ch in ['<', '>', ':', '"', '/', '\\', '|', '?', '*']):
+        return False
+    if " " in t:
+        return False
+    # Basic "name.ext" check
+    return bool(re.match(r"^[^.\s][^\\/:*?\"<>|\s]{0,200}\.[A-Za-z0-9]{1,8}$", t))
+
+
+def _looks_like_executable_token(text: str) -> bool:
+    import re
+
+    t = (text or "").strip().strip('"').strip("'")
+    if not t or len(t) > 64:
+        return False
+    if " " in t:
+        return False
+    return bool(re.match(r"^[A-Za-z0-9._-]+$", t))
+
+
+def _looks_like_pathish(text: str) -> bool:
+    t = (text or "").strip().strip('"').strip("'")
+    if not t:
+        return False
+    if _looks_like_url(t):
+        return True
+    if _looks_like_windows_abs_path(t):
+        return True
+    if "\\" in t or "/" in t:
+        return True
+    if _looks_like_filename(t):
+        return True
+    return False
+
+
+def _extract_latest_artifact_path_from_history(history: list[dict[str, str]]) -> str | None:
     """
-    Best-effort recovery for malformed tool inputs.
-    Only fills a single missing required string field with the last user message.
+    Try to find the most recent tool result that included a file-like artifact path.
+    This helps recover cases like: fs.write -> launcher.open (missing target).
     """
-    if not last_user or not isinstance(inputs, dict):
+    for msg in reversed(history or []):
+        if msg.get("role") != "tool":
+            continue
+        content = str(msg.get("content", "") or "")
+        if "artifacts=" not in content:
+            continue
+        artifacts_line = None
+        for line in content.splitlines():
+            if line.startswith("artifacts="):
+                artifacts_line = line[len("artifacts=") :].strip()
+                break
+        if not artifacts_line:
+            continue
+        try:
+            artifacts = json.loads(artifacts_line)
+        except Exception:
+            continue
+        if not isinstance(artifacts, dict):
+            continue
+        for key in ("path", "dst", "src"):
+            val = artifacts.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    return None
+
+
+def _auto_fill_missing_inputs_from_context(
+    *,
+    tool_id: str,
+    tool: Any,
+    inputs: dict[str, Any],
+    last_user: str,
+    history: list[dict[str, str]],
+) -> dict[str, Any] | None:
+    if not isinstance(inputs, dict):
         return None
     try:
         schema = getattr(tool, "spec", None).inputs_schema if getattr(tool, "spec", None) else {}
@@ -125,9 +215,31 @@ def _auto_fill_missing_inputs(*, tool: Any, inputs: dict[str, Any], last_user: s
         prop = props.get(key, {})
         if prop.get("type") != "string":
             return None
-        fixed = dict(inputs)
-        fixed[key] = last_user
-        return fixed
+
+        # launcher.open recovery: prefer recent tool artifact paths (fs.write, fs.rename, etc.)
+        if tool_id == "launcher.open" and key == "target":
+            # If the user literally supplied a plausible target, use it.
+            if last_user and (_looks_like_pathish(last_user) or _looks_like_executable_token(last_user)):
+                fixed = dict(inputs)
+                fixed[key] = str(last_user).strip()
+                return fixed
+
+            # Otherwise, try to open the most recently created/mentioned artifact path.
+            cand = _extract_latest_artifact_path_from_history(history)
+            if cand:
+                c = cand.strip().strip('"').strip("'")
+                if _looks_like_url(c) or _looks_like_windows_abs_path(c):
+                    target = c
+                else:
+                    p = Path(c).expanduser()
+                    if not p.is_absolute():
+                        p = (Path.cwd() / p)
+                    target = str(p)
+                fixed = dict(inputs)
+                fixed[key] = target
+                return fixed
+
+        return None
     except Exception:
         return None
 
@@ -828,6 +940,7 @@ class Agent:
         grounded: list[str] = []
         profile_lines: list[str] = []
         summary_lines: list[str] = []
+        recent_action_lines: list[str] = []
         # Track last user message for tool input recovery.
         last_user = ""
         for m in reversed(history):
@@ -893,7 +1006,6 @@ class Agent:
                     grounded = []
 
             # Fetch recent tool actions (across sessions) for continuity.
-            recent_action_lines: list[str] = []
             try:
                 recent_tool_evs = self._memory.recent(owner=owner, limit=5, kinds=["tool"])
                 for ev in reversed(recent_tool_evs):  # oldest first
@@ -1030,7 +1142,13 @@ class Agent:
             except Exception as e:
                 # Attempt generic recovery for any tool: fill one missing required string.
                 recovered = False
-                fixed_inputs = _auto_fill_missing_inputs(tool=tool, inputs=inputs, last_user=last_user)
+                fixed_inputs = _auto_fill_missing_inputs_from_context(
+                    tool_id=tool_id,
+                    tool=tool,
+                    inputs=inputs,
+                    last_user=last_user,
+                    history=history,
+                )
                 if fixed_inputs is not None:
                     try:
                         self._tools.validate_inputs(tool_id, fixed_inputs)
@@ -1054,6 +1172,8 @@ class Agent:
                         )
                         self._auditor.log_event({"type": "llm_output", "kind": "repair", "text": _trim_for_log(raw2)})
                         obj2 = _parse_first_json_object(raw2)
+                        if isinstance(obj2, dict) and obj2.get("type") == "final":
+                            return FinalResponse(content=str(obj2.get("content", "")).strip())
                         if isinstance(obj2, dict) and obj2.get("type") in {"tool", tool_id}:
                             if obj2.get("type") == "tool":
                                 tool_id = str(obj2.get("tool_id", tool_id)).strip() or tool_id

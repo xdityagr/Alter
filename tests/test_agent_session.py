@@ -71,3 +71,95 @@ def test_session_returns_confirm_tool_request(tmp_path):
     assert isinstance(out, ToolRequest)
     assert out.tool_id == "demo.danger"
 
+
+def test_launcher_open_missing_target_does_not_autofill_from_last_user(tmp_path):
+    reg = ToolRegistry()
+    reg.register(
+        Tool(
+            spec=ToolSpec(
+                id="launcher.open",
+                name="Launch App/File",
+                description="Open a file/app",
+                inputs_schema={
+                    "type": "object",
+                    "properties": {"target": {"type": "string"}},
+                    "required": ["target"],
+                    "additionalProperties": False,
+                },
+                confirm=False,
+            ),
+            action=lambda _: (_ for _ in ()).throw(AssertionError("launcher.open should not execute")),
+        )
+    )
+    llm = FakeLlm(
+        outputs=[
+            '{"type":"tool","tool_id":"launcher.open","inputs":{},"reason":"open"}',
+            '{"type":"final","content":"repaired"}',
+        ]
+    )
+    agent = Agent(llm=llm, tools=reg, auditor=Auditor(path=tmp_path / "audit.jsonl"))
+    session = agent.new_session()
+    out = session.run_turn(user_message="Yes please go on?")
+    assert isinstance(out, FinalResponse)
+    assert out.content == "repaired"
+
+
+def test_launcher_open_missing_target_recovers_from_recent_artifact_path(tmp_path):
+    reg = ToolRegistry()
+
+    reg.register(
+        Tool(
+            spec=ToolSpec(
+                id="fs.write",
+                name="Write File",
+                description="write",
+                inputs_schema={
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+                    "required": ["path", "content"],
+                    "additionalProperties": False,
+                },
+                confirm=False,
+            ),
+            action=lambda inputs: ToolResult(status="ok", artifacts={"path": inputs["path"]}),
+        )
+    )
+
+    opened: list[str] = []
+
+    def _open(inputs):
+        opened.append(str(inputs["target"]))
+        return ToolResult(status="ok", stdout="opened")
+
+    reg.register(
+        Tool(
+            spec=ToolSpec(
+                id="launcher.open",
+                name="Launch App/File",
+                description="Open a file/app",
+                inputs_schema={
+                    "type": "object",
+                    "properties": {"target": {"type": "string"}},
+                    "required": ["target"],
+                    "additionalProperties": False,
+                },
+                confirm=False,
+            ),
+            action=_open,
+        )
+    )
+
+    llm = FakeLlm(
+        outputs=[
+            '{"type":"tool","tool_id":"fs.write","inputs":{"path":"leave_application.docx","content":"x"},"reason":"write file"}',
+            '{"type":"tool","tool_id":"launcher.open","inputs":{},"reason":"open it"}',
+            '{"type":"final","content":"done"}',
+        ]
+    )
+    agent = Agent(llm=llm, tools=reg, auditor=Auditor(path=tmp_path / "audit.jsonl"))
+    session = agent.new_session()
+    out = session.run_turn(user_message="write and open")
+    assert isinstance(out, FinalResponse)
+    assert out.content == "done"
+    assert opened
+    assert opened[-1].lower().endswith("leave_application.docx")
